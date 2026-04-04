@@ -1,0 +1,175 @@
+name: CI/CD
+on:
+  pull_request:
+  push:
+    branches:
+    - main
+
+env:
+  RUSTUP_MAX_RETRIES: 10
+  # Tests have to run as root on GHA since the VM image is very restrictive about
+  # who can open "fun" device files like `/dev/uinput`.
+  CICD_SUDO: 1
+
+  CROSS_VERSION: v0.2.5
+
+  MSRV: 1.85.0  # (keep this in sync with `Cargo.toml`'s `rust-version`)
+
+
+jobs:
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      run: |
+        rustup install ${{ env.MSRV }} --profile=minimal
+        rustup default ${{ env.MSRV }}
+        rustup install nightly --profile=minimal
+
+    - name: Install CI/CD tooling
+      run: cargo install sludge-cicd --debug
+
+    - name: Run CI/CD
+      run: sludge-cicd
+      env:
+        CICD_SKIP_DOCS: 1
+
+  build:
+    name: Build only
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: i686-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      run: |
+        rustup install stable --profile=minimal
+        rustup install nightly --profile=minimal
+
+    - name: Install Rust target
+      run: rustup target add ${{ matrix.target }}
+
+    - name: Build the library
+      run: |
+        cargo build --target ${{ matrix.target }}
+        cargo build --target ${{ matrix.target }} --features tokio
+        cargo build --target ${{ matrix.target }} --features async-io
+
+  freebsd:
+    runs-on: ubuntu-latest
+    name: Test on FreeBSD
+    timeout-minutes: 10  # this occasionally hangs forever, so cancel it quickly
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Test
+      id: test
+      uses: vmactions/freebsd-vm@v1.2.1
+      with:
+        sync: rsync
+        copyback: false
+        prepare: |
+          pkg install -y rustup-init
+          rustup-init -y --profile minimal
+        # Note that we can't really test on i686, because FreeBSD's evdev implementation is pretty
+        # broken when a 32-bit userspace program talks to a 64-bit kernel.
+        run: |
+          rustup --version
+          rustc --version
+          cargo test
+
+  big-endian:
+    runs-on: ubuntu-latest
+    name: Test on Big Endian emulator
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install cross
+      run: |
+        mkdir -p "$RUNNER_TEMP/cross"
+        echo "$RUNNER_TEMP/cross" >> $GITHUB_PATH
+        cd "$RUNNER_TEMP/cross"
+        curl -LO https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz
+        tar xf cross-x86_64-unknown-linux-musl.tar.gz
+
+    - name: Run unit tests on PowerPC
+      run: cross test --lib --target powerpc64-unknown-linux-gnu
+      # We only run unit tests, not the integration tests, because QEMU doesn't translate the
+      # evdev/uinput ioctls between architectures.
+
+  ci:
+    name: CI
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-latest
+            target: i686-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      run: |
+        rustup install stable --profile=minimal
+        rustup install nightly --profile=minimal
+
+    - name: Install Rust target
+      run: rustup target add ${{ matrix.target }}
+
+    - name: Install CI/CD tooling
+      run: cargo install sludge-cicd --debug
+
+    - name: Run CI
+      run: sludge-cicd --target ${{ matrix.target }}
+      env:
+        CICD_SKIP_DOCS: 1
+
+  cd:
+    name: CD
+    needs: [msrv, build, ci, freebsd, big-endian]
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # pushes tags to the repo
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install Rust toolchain
+      run: |
+        rustup install stable --profile=minimal
+        rustup install nightly --profile=minimal
+
+    - name: Install CI/CD tooling
+      run: cargo install sludge-cicd --debug
+
+    - name: Run CI/CD
+      run: sludge-cicd --features serde,tokio  # features for the docs build
+      env:
+        CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

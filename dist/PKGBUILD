@@ -1,0 +1,24 @@
+pkgname=xjemulator
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="A dynamic GUI to emulate virtual Xbox 360 controllers on Linux via evdevil/uinput."
+arch=('x86_64')
+url="https://github.com/TODO/XJemulator"
+license=('MIT')
+depends=('glibc' 'gcc-libs')
+makedepends=('cargo')
+source=("$pkgname-$pkgver.tar.gz") # Replace with GitHub release asset URL in the future
+sha256sums=('SKIP')
+
+build() {
+    cd "$pkgname-$pkgver"
+    cargo build --release --locked
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+    install -Dm755 "target/release/xjemulator" "$pkgdir/usr/bin/xjemulator"
+    install -Dm644 "assets/xjemulator.desktop" "$pkgdir/usr/share/applications/xjemulator.desktop"
+    install -Dm644 "assets/xjemulator.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/xjemulator.svg"
+    install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

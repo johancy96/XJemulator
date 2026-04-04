@@ -1,0 +1,47 @@
+[package]
+name = "evdevil"
+version = "0.4.0"
+edition = "2024"
+license = "0BSD"
+description = "Bindings to Linux' input device APIs: evdev and uinput"
+categories = ["os::linux-apis", "os::freebsd-apis", "hardware-support"]
+repository = "https://github.com/SludgePhD/evdevil"
+keywords = ["gamepad", "joystick", "keyboard", "mouse", "touchscreen"]
+rust-version = "1.85"  # (keep this in sync with ci.yaml)
+
+[dependencies]
+libc = "0.2.172"
+uoctl = "1.0.1"
+log = "0.4.27"
+serde = { version = "1.0.219", optional = true }
+tokio = { version = "1.46.1", default-features = false, optional = true, features = ["net"] }
+async-io = { version = "2.4.1", default-features = false, optional = true }
+
+[features]
+
+# Implements `Serialize` and `Deserialize` for event code types like `Key`, `Rel`, `Abs` etc.
+serde = ["dep:serde"]
+
+# Enables `async` functionality using the Tokio runtime and reactor.
+tokio = ["dep:tokio"]
+
+# Enables `async` functionality using the `async-io` reactor.
+async-io = ["dep:async-io"]
+
+[dev-dependencies]
+env_logger = "0.11.8"
+
+# for testing the async features:
+tokio = { version = "1", default-features = false, features = ["rt"] }
+
+# for testing the serde feature:
+serde = "1.0.219"
+csv = "1.3.1"
+postcard = { version = "1.1", features = ["alloc"] }
+
+[[test]]
+name = "hotplug"
+harness = false
+
+[package.metadata.docs.rs]
+all-features = true

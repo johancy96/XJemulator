@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=XJemulator
+Comment=Xbox 360 Controller Emulator for Linux
+Exec=xjemulator
+Icon=xjemulator
+Terminal=false
+Type=Application
+Categories=Utility;HardwareSettings;
+Keywords=xbox;controller;emulator;gamepad;udev;

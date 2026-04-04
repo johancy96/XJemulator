@@ -1,0 +1,30 @@
+# Reglas udev y Emulación uinput
+
+## Seguridad vs Emulación Virtual
+Históricamente, cualquier utilidad que inyecta código HID o manipula input virtual en Linux requería ejecución mediante `sudo`. Desde el desarrollo `v0.1.0` eliminamos esta limitante radical estableciendo delegación a través del subsistema `udev`.
+
+## Módulo de instalación interactiva (`src/gui/udev_setup.rs`)
+La carga subyacente para evadir root es proveer permisos rw a `/dev/uinput` y permitir acceso local a los input crudos en el grupo `input`. 
+La aplicación es capaz de instalar estas reglas. 
+Si determina en la inicialización que el usuario actual carece de privilegios `+w` en la ruta, gatilla un menú contextual EGUI visible en el sistema.
+
+### Escalada Dinámica de Privilegios 
+El sistema usa `pkexec bash -c` por lo cual:
+1. Pide al demonio `polkit` interfaz de diálogo gráfica al usuario solicitando credenciales.
+2. Copia silenciosamente un bloque `.rules` a `/etc/udev/rules.d/99-xjemulator.rules`.
+3. Ejecuta localmente `udevadm control --reload-rules && udevadm trigger`.
+
+### Contenido de la regla
+
+```bash
+# Otorgar acceso a uinput a usuarios comunes sin necesidad de sudo
+KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
+
+# Exponer el dispositivo virtual creado por el emulador a todos los entornos locales (Steam/Proton)
+SUBSYSTEM=="input", ATTRS{name}=="Microsoft X-Box 360 pad", MODE="0666", ENV{ID_INPUT_JOYSTICK}="1"
+```
+
+## Beneficios
+- Total compatibilidad con Steam Input y Wine/Proton.
+- Interfaz no corre bajo "sandox restrictiva" o root previniendo riesgos críticos del desktop manager.
+- Elimina cualquier script post-instalación destructivo.

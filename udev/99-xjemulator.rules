@@ -1,0 +1,16 @@
+# XJEmulator udev rules
+# Instalar: sudo cp 99-xjemulator.rules /etc/udev/rules.d/
+# Recargar: sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# Permitir acceso al dispositivo uinput para el grupo input
+# Necesario para crear dispositivos virtuales sin sudo
+KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
+
+# Asegurar que el dispositivo virtual Xbox 360 tenga permisos correctos
+# y sea detectado como joystick por el sistema
+SUBSYSTEM=="input", ATTRS{name}=="Microsoft X-Box 360 pad", ENV{ID_INPUT_JOYSTICK}="1", TAG+="uaccess"
+
+# Excluir el mando original de la deteccion simultanea
+# (solo si el usuario tiene un mando generico que quiere ocultar)
+# Descomentar y ajustar el ATTRS{name} segun tu mando:
+# SUBSYSTEM=="input", ATTRS{name}=="Nombre de tu mando generico", ENV{ID_INPUT_JOYSTICK}="0"

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="100" rx="20" fill="#2c2c2c"/>
+  <path d="M 20,40 Q 20,20 50,20 Q 80,20 80,40 Q 80,70 65,75 Q 50,80 35,75 Q 20,70 20,40 Z" fill="#cfcfcf"/>
+  <circle cx="35" cy="40" r="10" fill="#4d4d4d"/>
+  <circle cx="65" cy="55" r="10" fill="#4d4d4d"/>
+  <path d="M 30,55 h 10 v 10 h -10 z" fill="#1a1a1a"/>
+  <!-- D-Pad -->
+  <rect x="25" y="58" width="20" height="4" fill="#303030"/>
+  <rect x="33" y="50" width="4" height="20" fill="#303030"/>
+  <!-- Buttons -->
+  <circle cx="70" cy="35" r="3" fill="#ff4d4d"/>
+  <circle cx="63" cy="42" r="3" fill="#33cc33"/>
+  <circle cx="77" cy="42" r="3" fill="#4da6ff"/>
+  <circle cx="70" cy="49" r="3" fill="#ffcc00"/>
+  <!-- Guide -->
+  <circle cx="50" cy="40" r="5" fill="#aaffaa"/>
+</svg>

@@ -1,0 +1,33 @@
+[package]
+name = "xjemulator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.31"
+egui = "0.31"
+evdevil = "0.2"
+toml = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "1.0"
+
+[package.metadata.deb]
+maintainer = "Johancy <johancy@local>"
+copyright = "2024, Johancy"
+license-file = ["LICENSE", "4"]
+depends = "$auto"
+section = "utility"
+assets = [
+    ["target/release/xjemulator", "usr/bin/xjemulator", "755"],
+    ["assets/xjemulator.desktop", "usr/share/applications/xjemulator.desktop", "644"],
+    ["assets/icon.png", "usr/share/pixmaps/xjemulator.png", "644"]
+]
+
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/xjemulator", dest = "/usr/bin/xjemulator", mode = "755" },
+    { source = "assets/xjemulator.desktop", dest = "/usr/share/applications/xjemulator.desktop", mode = "644" },
+    { source = "assets/icon.png", dest = "/usr/share/pixmaps/xjemulator.png", mode = "644" }
+]

@@ -6,6 +6,15 @@ XJemulator es una aplicación gráfica moderna para Linux que permite intercepta
 
 ---
 
+## 🚀 Instalación Rápida (Recomendado)
+
+Si solo quieres instalar el programa sin descargar todo el repositorio, ejecuta este comando en tu terminal:
+```bash
+curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/dist/install.sh | bash
+```
+
+---
+
 ## 🛠 Instalación y Guía de Compilación
 
 Hemos integrado herramientas automáticas para que compilar XJemulator y generar instaladores directamente para tu distribución sea un proceso libre de problemas.

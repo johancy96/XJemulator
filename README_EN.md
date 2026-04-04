@@ -15,7 +15,15 @@ curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/dist/in
 
 ---
 
-## 🛠 Installation and Build Guide
+## 🗑 Fast Uninstallation
+
+If you want to completely remove XJemulator from your system:
+```bash
+curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/dist/uninstall.sh | bash
+```
+> *Note: To also remove your profiles and local configurations, add `--full` at the end: `| bash -s -- --full`*
+
+---
 
 We have integrated automatic tools to make compiling XJemulator and generating installers directly for your distribution a hassle-free process.
 

@@ -6,6 +6,16 @@ XJemulator es una aplicación gráfica moderna para Linux que permite intercepta
 
 ---
 
+## 🗑 Fast Uninstallation
+
+If you want to completely remove XJemulator from your system:
+```bash
+curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/dist/uninstall.sh | bash
+```
+> *Note: To also remove your profiles and local configurations, add `--full` at the end: `| bash -s -- --full`*
+
+---
+
 ## 🚀 Instalación Rápida (Recomendado)
 
 Si solo quieres instalar el programa sin descargar todo el repositorio, ejecuta este comando en tu terminal:
@@ -15,7 +25,15 @@ curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/dist/in
 
 ---
 
-## 🛠 Instalación y Guía de Compilación
+## 🗑 Desinstalación Rápida
+
+Si deseas eliminar XJemulator por completo de tu sistema:
+```bash
+curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/dist/uninstall.sh | bash
+```
+> *Nota: Para eliminar también tus perfiles y configuraciones locales, añade `--full` al final: `| bash -s -- --full`*
+
+---
 
 Hemos integrado herramientas automáticas para que compilar XJemulator y generar instaladores directamente para tu distribución sea un proceso libre de problemas.
 

@@ -1,1 +1,9 @@
 /target
+.cargo_home/
+config.toml
+mi_mando.toml
+udev/99-xjemulator.rules
+# Ignore user profiles but keep placeholders
+/profiles/*.toml
+!/profiles/generic.toml
+!/profiles/examples/

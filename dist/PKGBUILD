@@ -7,16 +7,16 @@ url="https://github.com/TODO/XJemulator"
 license=('MIT')
 depends=('glibc' 'gcc-libs')
 makedepends=('cargo')
-source=("$pkgname-$pkgver.tar.gz") # Replace with GitHub release asset URL in the future
+source=("local_source::git+file://$PWD/..") # Point to local project root for testing
 sha256sums=('SKIP')
 
 build() {
-    cd "$pkgname-$pkgver"
+    cd "$srcdir/local_source"
     cargo build --release --locked
 }
 
 package() {
-    cd "$pkgname-$pkgver"
+    cd "$srcdir/local_source"
     install -Dm755 "target/release/xjemulator" "$pkgdir/usr/bin/xjemulator"
     install -Dm644 "assets/xjemulator.desktop" "$pkgdir/usr/share/applications/xjemulator.desktop"
     install -Dm644 "assets/xjemulator.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/xjemulator.svg"

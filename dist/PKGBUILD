@@ -7,11 +7,13 @@ url="https://github.com/TODO/XJemulator"
 license=('MIT')
 depends=('glibc' 'gcc-libs')
 makedepends=('cargo')
-source=("local_source::git+file://$PWD/..") # Point to local project root for testing
+source=("local_source::git+file:///home/johancy/Proyectos/XJemulator") # Point to project root
 sha256sums=('SKIP')
 
 build() {
     cd "$srcdir/local_source"
+    export CARGO_HOME="$(pwd)/.cargo_home"
+    mkdir -p "$CARGO_HOME"
     cargo build --release --locked
 }
 

@@ -4,8 +4,11 @@ set -e
 # Enter project root
 cd "$(dirname "$0")/.."
 
+# Use local cargo home to avoid write errors in some Linux environments
+export CARGO_HOME="$(pwd)/.cargo_home"
+mkdir -p "$CARGO_HOME"
+
 echo "==> Compiling Release build..."
-# Ensure CARGO_HOME is set if requested
 cargo build --release
 
 echo "==> Checking cargo-deb..."

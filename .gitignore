@@ -1,7 +1,18 @@
+# XJemulator ignore list
 /target
 .cargo_home/
 config.toml
 mi_mando.toml
+
+# Dist artifacts
+/dist/src/
+/dist/pkg/
+/dist/local_source/
+/dist/*.pkg.tar.zst
+/dist/*.deb
+/dist/*.rpm
+/dist/AppDir/
+/*.AppImage
 udev/99-xjemulator.rules
 # Ignore user profiles but keep placeholders
 /profiles/*.toml

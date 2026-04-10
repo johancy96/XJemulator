@@ -5,7 +5,10 @@ use std::sync::{Arc, Mutex};
 use eframe::egui;
 use tracing::{error, info};
 
-use super::udev_setup::{self, UdevStatus};
+fn check_uinput_access() -> bool {
+    std::fs::OpenOptions::new().write(true).open("/dev/uinput").is_ok()
+}
+
 use crate::mapper::Mapper;
 use crate::scanner::GamepadInfo;
 use crate::virtual_device::VirtualXbox360;
@@ -58,10 +61,10 @@ pub struct App {
     editing_profile: Option<(String, String)>, // (filename, content)
 
     saved_profiles: Vec<String>,
-    udev_status: UdevStatus,
     status_msg: Option<String>,
 
     pub config: crate::config::AppConfig,
+    uinput_ok: bool,
 }
 
 impl App {
@@ -90,9 +93,9 @@ impl App {
             calib_release_watch: None,
             editing_profile: None,
             saved_profiles,
-            udev_status: UdevStatus::check(),
             status_msg: None,
             config,
+            uinput_ok: check_uinput_access(),
         }
     }
 
@@ -284,11 +287,9 @@ impl App {
                 }
                 self.status_msg = Some(format!("Perfil guardado: {}", fname));
                 self.reset_calibration();
-                if self.udev_status.all_ok() {
-                    if let Some(idx) = self.selected {
-                        if let Some(gp) = self.gamepads.get(idx).cloned() {
-                            self.start_emulator(gp.path);
-                        }
+                if let Some(idx) = self.selected {
+                    if let Some(gp) = self.gamepads.get(idx).cloned() {
+                        self.start_emulator(gp.path);
                     }
                 }
             }
@@ -319,17 +320,21 @@ impl eframe::App for App {
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add_space(10.0);
-                    let lang_btn_text = if self.config.lang == crate::i18n::Lang::Es {
-                        "🌐 EN"
-                    } else {
-                        "🌐 ES"
+                    let mut new_lang = self.config.lang;
+                    let display_text = match self.config.lang {
+                        crate::i18n::Lang::Es => "🌐 Español",
+                        crate::i18n::Lang::En => "🌐 English",
                     };
-                    if ui.button(lang_btn_text).clicked() {
-                        self.config.lang = if self.config.lang == crate::i18n::Lang::Es {
-                            crate::i18n::Lang::En
-                        } else {
-                            crate::i18n::Lang::Es
-                        };
+
+                    egui::ComboBox::from_id_source("lang_selector")
+                        .selected_text(display_text)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut new_lang, crate::i18n::Lang::Es, "Español");
+                            ui.selectable_value(&mut new_lang, crate::i18n::Lang::En, "English");
+                        });
+
+                    if new_lang != self.config.lang {
+                        self.config.lang = new_lang;
                         self.config.save();
                     }
                     if !self.emulators.is_empty() {
@@ -450,7 +455,6 @@ impl App {
                             }
                         } else {
                             if self.emulators.len() < 4
-                                && self.udev_status.all_ok()
                                 && self.active_profile.is_some()
                                 && self.calib_step == CalibStep::Idle
                             {
@@ -492,38 +496,10 @@ impl App {
             self.gamepads = crate::scanner::scan_gamepads();
         }
 
-        // udev status
-        ui.add_space(14.0);
-        ui.label(
-            egui::RichText::new(crate::i18n::t(&self.config.lang, "lbl_sys_status"))
-                .strong()
-                .size(13.0),
-        );
-        ui.separator();
-
-        if self.udev_status.all_ok() {
+        if !self.uinput_ok {
+            ui.add_space(14.0);
             ui.colored_label(
-                egui::Color32::LIGHT_GREEN,
-                crate::i18n::t(&self.config.lang, "udev_ok"),
-            );
-            ui.add_space(4.0);
-            if ui
-                .small_button(crate::i18n::t(&self.config.lang, "btn_uninstall_rules"))
-                .clicked()
-            {
-                match udev_setup::try_uninstall_rules() {
-                    Ok(_) => {
-                        self.udev_status = UdevStatus::check();
-                        self.status_msg = Some("Reglas udev desinstaladas".into());
-                    }
-                    Err(e) => {
-                        self.status_msg = Some(format!("Error: {}", e));
-                    }
-                }
-            }
-        } else {
-            ui.colored_label(
-                egui::Color32::YELLOW,
+                egui::Color32::from_rgb(220, 80, 80),
                 crate::i18n::t(&self.config.lang, "udev_warn"),
             );
             ui.label(
@@ -531,21 +507,6 @@ impl App {
                     .size(11.0)
                     .weak(),
             );
-            ui.add_space(6.0);
-            if ui
-                .button(crate::i18n::t(&self.config.lang, "btn_install_rules"))
-                .clicked()
-            {
-                match udev_setup::try_install_rules() {
-                    Ok(_) => {
-                        self.udev_status = UdevStatus::check();
-                        self.status_msg = Some("✓ Reglas udev instaladas".into());
-                    }
-                    Err(e) => {
-                        self.status_msg = Some(format!("Error: {}", e));
-                    }
-                }
-            }
         }
 
         if let Some(ref ap) = self.active_profile.clone() {

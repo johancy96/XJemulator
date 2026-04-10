@@ -15,8 +15,7 @@ XJemulator/
 │   ├── gui/                    # Toda la Interfaz Gráfica (Egui)
 │   │   ├── app.rs              # Monolito del Fronted: Lógica UI principal
 │   │   ├── calibration.rs      # [DEPRECADO] Archivo viejo para el formato interno de mapeo (movido)
-│   │   ├── controller.rs       # Entidad SVG renderizada en memoria para UX de Gamepad 360
-│   │   └── udev_setup.rs       # Gestor de permisos / Escalado Pkexec
+│   │   └── controller.rs       # Entidad SVG renderizada en memoria para UX de Gamepad 360
 │   ├── config.rs               # Modelo de `AppConfig`, almacena y escribe configuraciones persistentes (toml)
 │   ├── error.rs                # Propagación unificada de Errores Result en Rust
 │   ├── i18n.rs                 # Diccionarios de Internacionalización para Multi-lenguaje (ES/EN)

@@ -24,12 +24,15 @@ section = "utility"
 assets = [
     ["target/release/xjemulator", "usr/bin/xjemulator", "755"],
     ["assets/xjemulator.desktop", "usr/share/applications/xjemulator.desktop", "644"],
-    ["assets/xjemulator.svg", "usr/share/icons/hicolor/scalable/apps/xjemulator.svg", "644"]
+    ["assets/xjemulator.svg", "usr/share/icons/hicolor/scalable/apps/xjemulator.svg", "644"],
+    ["udev/99-xjemulator.rules", "etc/udev/rules.d/99-xjemulator.rules", "644"]
 ]
+maintainer-scripts = "dist/debian"
 
 [package.metadata.generate-rpm]
 assets = [
     { source = "target/release/xjemulator", dest = "/usr/bin/xjemulator", mode = "755" },
     { source = "assets/xjemulator.desktop", dest = "/usr/share/applications/xjemulator.desktop", mode = "644" },
-    { source = "assets/xjemulator.svg", dest = "/usr/share/icons/hicolor/scalable/apps/xjemulator.svg", mode = "644" }
+    { source = "assets/xjemulator.svg", dest = "/usr/share/icons/hicolor/scalable/apps/xjemulator.svg", mode = "644" },
+    { source = "udev/99-xjemulator.rules", dest = "/etc/udev/rules.d/99-xjemulator.rules", mode = "644" }
 ]

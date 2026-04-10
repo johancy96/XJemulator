@@ -10,7 +10,6 @@ XJemulator es una aplicación gráfica escrita en Rust mediante `egui` que permi
   - `app.rs`: Estado central `App` y funciones principales de renderizado EGUI.
   - `types.rs`: Definición de slots de calibración (`BtnSlot`, `AxisSlot`) y estado crudo (`RawCapture`).
   - `backend.rs`: Bucles de procesamiento independientes (lector de eventos evdevil, emulación asíncrona, thresholds de calibración).
-  - `udev_setup.rs`: Lógica para instalar automáticamente reglas udev desde la GUI usando elevación pkexec.
 - `src/i18n.rs`: Motor de traducción para soporte multilingüe.
 - `src/virtual_device.rs`: Interacción con kernel usando `uinput` para registrar el mando virtual.
 - `src/mapper.rs`: Lógica de transposición, interpolación de curvas y perfiles TOML.

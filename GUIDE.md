@@ -14,9 +14,13 @@ Para que Linux permita que XJemulator lea tus mandos físicos e instancie un nue
    ```bash
    sudo usermod -aG input $USER
    ```
-2. **Instalar reglas udev**:
-   Al abrir la aplicación, fíjate en el indicador rojo de la barra superior. Si dice **"⚠ Instalar reglas udev"**, **haz clic allí**.
-   Esto te pedirá permisos momentáneos para instalar automáticamente los drivers de reglas del sistema y recargará `udev`. Gracias a esto, **nunca tendrás que usar permisos sudo para abrir el emulador en el futuro**.
+2. **Verificar reglas udev**:
+   Normalmente, al instalar `XJemulator` la aplicación configura estas reglas de manera automática. 
+   **Si la instalación automática falló** o corres una copia manual, la aplicación mostrará una advertencia roja en pantalla. En dicho caso, ejecuta lo siguiente en tu terminal para instalarlas manualmente:
+   ```bash
+   sudo sh -c 'curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/udev/99-xjemulator.rules > /etc/udev/rules.d/99-xjemulator.rules'
+   sudo udevadm control --reload-rules && sudo udevadm trigger
+   ```
 
 ---
 

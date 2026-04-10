@@ -3,16 +3,11 @@
 ## Seguridad vs Emulación Virtual
 Históricamente, cualquier utilidad que inyecta código HID o manipula input virtual en Linux requería ejecución mediante `sudo`. Desde el desarrollo `v0.1.0` eliminamos esta limitante radical estableciendo delegación a través del subsistema `udev`.
 
-## Módulo de instalación interactiva (`src/gui/udev_setup.rs`)
+## Instalación Automática
 La carga subyacente para evadir root es proveer permisos rw a `/dev/uinput` y permitir acceso local a los input crudos en el grupo `input`. 
-La aplicación es capaz de instalar estas reglas. 
-Si determina en la inicialización que el usuario actual carece de privilegios `+w` en la ruta, gatilla un menú contextual EGUI visible en el sistema.
 
-### Escalada Dinámica de Privilegios 
-El sistema usa `pkexec bash -c` por lo cual:
-1. Pide al demonio `polkit` interfaz de diálogo gráfica al usuario solicitando credenciales.
-2. Copia silenciosamente un bloque `.rules` a `/etc/udev/rules.d/99-xjemulator.rules`.
-3. Ejecuta localmente `udevadm control --reload-rules && udevadm trigger`.
+Ya no se realiza una escalada de privilegios dinámica ni interactiva desde la GUI con `pkexec`. 
+En su lugar, el archivo `99-xjemulator.rules` se distribuye e instala automáticamente a través de los sistemas de empaquetado y scripts de instalación (`.deb`, `.rpm`, `PKGBUILD` o `install.sh`).
 
 ### Contenido de la regla
 

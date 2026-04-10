@@ -14,9 +14,13 @@ To allow Linux to read your physical controllers and instantiate a new "Virtual 
    ```bash
    sudo usermod -aG input $USER
    ```
-2. **Install udev rules**:
-   When opening the application, notice the red indicator in the top bar. If it says **"⚠ Install udev rules"**, **click there**.
-   This will ask for temporary permissions to automatically install the system rules drivers and reload `udev`. Thanks to this, **you will never have to use sudo permissions to open the emulator in the future**.
+2. **Verify udev rules**:
+   Normally, when installing `XJemulator`, the application configures these rules automatically. 
+   **If the automatic installation failed** or you run a manual copy, the application will display a red warning on-screen. In that case, run the following in your terminal to install them manually:
+   ```bash
+   sudo sh -c 'curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/udev/99-xjemulator.rules > /etc/udev/rules.d/99-xjemulator.rules'
+   sudo udevadm control --reload-rules && sudo udevadm trigger
+   ```
 
 ---
 

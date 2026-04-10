@@ -116,6 +116,12 @@ pub fn t<'a>(lang: &Lang, key: &'a str) -> &'a str {
         (Lang::Es, "btn_cancel") => "Cancelar",
         (Lang::En, "btn_cancel") => "Cancel",
 
+        // --- UDEV STATUS ---
+        (Lang::Es, "udev_warn") => "⚠️ Reglas udev no detectadas",
+        (Lang::En, "udev_warn") => "⚠️ udev rules not detected",
+        (Lang::Es, "lbl_udev_req") => "La emulación fallará. Revisa la guía.",
+        (Lang::En, "lbl_udev_req") => "Emulation will fail. Check the guide.",
+
         // --- DEFAULT BUTTONS ---
         (Lang::Es, "btn_a") => "Botón A",
         (Lang::En, "btn_a") => "Button A",

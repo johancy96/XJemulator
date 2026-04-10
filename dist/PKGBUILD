@@ -22,5 +22,6 @@ package() {
     install -Dm755 "target/release/xjemulator" "$pkgdir/usr/bin/xjemulator"
     install -Dm644 "assets/xjemulator.desktop" "$pkgdir/usr/share/applications/xjemulator.desktop"
     install -Dm644 "assets/xjemulator.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/xjemulator.svg"
+    install -Dm644 "udev/99-xjemulator.rules" "$pkgdir/etc/udev/rules.d/99-xjemulator.rules"
     install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

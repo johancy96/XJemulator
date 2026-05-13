@@ -7,7 +7,18 @@ set -e
 
 # --- Configuration ---
 APP_NAME="xjemulator"
-CURRENT_BRANCH="${BRANCH:-master}"
+
+# Dynamic Branch Detection:
+# 1. Env Var (BRANCH)
+# 2. Local Git Branch (if inside a repo)
+# 3. Default to master
+if [ -n "$BRANCH" ]; then
+    CURRENT_BRANCH="$BRANCH"
+elif git rev-parse --abbrev-ref HEAD &>/dev/null; then
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+else
+    CURRENT_BRANCH="master"
+fi
 REPO_URL="https://github.com/johancy96/XJemulator.git"
 REPO_RAW="https://raw.githubusercontent.com/johancy96/XJemulator/$CURRENT_BRANCH"
 BIN_DEST="/usr/local/bin/$APP_NAME"

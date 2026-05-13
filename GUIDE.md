@@ -14,17 +14,19 @@ To allow Linux to read your physical controllers and instantiate a new "Virtual 
    ```bash
    sudo usermod -aG input $USER
    ```
-2. **Verify udev rules**:
-   Normally, when installing `XJemulator`, the application configures these rules automatically. 
-   **If the automatic installation failed** or you run a manual copy, the application will display a red warning on-screen. In that case, run the following in your terminal to install them manually:
-   **Bash / Zsh:**
+   **Standard Installation:**
    ```bash
    curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/scripts/install.sh | bash
    ```
-   **Fish:**
-   ```fish
-   curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/scripts/install.fish | fish
-   ```
+
+   **Developer/Branch Installation:**
+   If you need to install from a specific branch (e.g., `updates-testing`):
+   - **Bash/Zsh:** `BRANCH=updates-testing bash -c "$(curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/updates-testing/scripts/install.sh)"`
+   - **Fish:** `set -x BRANCH updates-testing; curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/updates-testing/scripts/install.fish | fish`
+
+   **Uninstallation:**
+   To remove the application:
+   `curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/scripts/uninstall.sh | bash`
 
 ---
 

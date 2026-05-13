@@ -1,17 +1,17 @@
 #!/bin/bash
 
-# XJemulator - Modern Uninstaller Script
+# XJemulator - Modern Uninstaller Script (PRODUCTION READY)
 # Reverts installation and cleans up the system professionally.
 
 set -e
 
-# --- Modular Configuration ---
+# --- Configuration (Must match install.sh) ---
 APP_NAME="xjemulator"
-UDEV_RULE="/etc/udev/rules.d/99-$APP_NAME.rules"
-MODULE_CONF="/etc/modules-load.d/$APP_NAME.conf"
+BIN_PATH="/usr/local/bin/$APP_NAME"
+UDEV_PATH="/etc/udev/rules.d/99-$APP_NAME.rules"
+MODULE_PATH="/etc/modules-load.d/$APP_NAME.conf"
 ICON_PATH="/usr/share/icons/hicolor/scalable/apps/$APP_NAME.svg"
 DESKTOP_PATH="/usr/share/applications/$APP_NAME.desktop"
-BIN_PATH="/usr/local/bin/$APP_NAME"
 CONFIG_DIR="$HOME/.config/$APP_NAME"
 
 # Colors
@@ -29,50 +29,40 @@ if ! command -v sudo &> /dev/null; then
     exit 1
 fi
 
-# 2. Remove Binary
-echo -e "${YELLOW}📂 Removing binary...${NC}"
-[ -f "$BIN_PATH" ] && sudo rm -f "$BIN_PATH" && echo "  ✔ $BIN_PATH removed."
+# 2. Function for safe removal
+remove_file() {
+    local file_path="$1"
+    local description="$2"
+    if [ -f "$file_path" ]; then
+        echo -e "${YELLOW}📂 Removing $description...${NC}"
+        sudo rm -f "$file_path"
+        echo -e "  ${GREEN}✔ Removed: $file_path${NC}"
+    fi
+}
 
-# 3. Revert System Configuration (Root)
-echo -e "${YELLOW}🔧 Reverting system configuration...${NC}"
+# 3. System Cleanup
+remove_file "$BIN_PATH" "binary"
+remove_file "$UDEV_PATH" "udev rules"
+remove_file "$MODULE_PATH" "kernel module config"
+remove_file "$ICON_PATH" "application icon"
+remove_file "$DESKTOP_PATH" "desktop launcher"
 
-# Udev Rules
-if [ -f "$UDEV_RULE" ]; then
-    sudo rm -f "$UDEV_RULE"
-    echo "  ✔ Udev rules removed."
-    sudo udevadm control --reload-rules
-    sudo udevadm trigger
-fi
+# Reload system databases
+echo -e "${YELLOW}🔄 Refreshing system databases...${NC}"
+sudo udevadm control --reload-rules && sudo udevadm trigger || true
+sudo gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+sudo update-desktop-database /usr/share/applications || true
 
-# Kernel Modules
-if [ -f "$MODULE_CONF" ]; then
-    sudo rm -f "$MODULE_CONF"
-    echo "  ✔ Kernel module configuration removed."
-fi
-
-# Icons and Launchers
-if [ -f "$ICON_PATH" ]; then
-    sudo rm -f "$ICON_PATH"
-    sudo gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
-    echo "  ✔ Icon removed."
-fi
-
-if [ -f "$DESKTOP_PATH" ]; then
-    sudo rm -f "$DESKTOP_PATH"
-    sudo update-desktop-database /usr/share/applications || true
-    echo "  ✔ .desktop launcher removed."
-fi
-
-# 4. Cleanup User Data (Optional)
+# 4. Optional User Data Cleanup
 if [[ "$1" == "--full" ]]; then
-    echo -e "${RED}⚠️  Full cleanup requested. Removing user configuration...${NC}"
+    echo -e "${RED}⚠️  Full cleanup requested. Removing user data...${NC}"
     if [ -d "$CONFIG_DIR" ]; then
         rm -rf "$CONFIG_DIR"
-        echo "  ✔ $CONFIG_DIR removed."
+        echo -e "  ${GREEN}✔ Removed: $CONFIG_DIR${NC}"
     fi
 else
-    echo -e "${BLUE}ℹ️  User profiles kept at $CONFIG_DIR${NC}"
-    echo -e "${BLUE}ℹ️  Use '${YELLOW}--full${BLUE}' if you want to delete them as well.${NC}"
+    echo -e "\n${BLUE}ℹ️  User profiles kept at $CONFIG_DIR${NC}"
+    echo -e "${BLUE}ℹ️  Run with '${YELLOW}--full${BLUE}' to remove them as well.${NC}"
 fi
 
 echo -e "\n${GREEN}✅ XJemulator has been successfully uninstalled.${NC}"

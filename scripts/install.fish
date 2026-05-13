@@ -4,9 +4,17 @@
 # Configures permissions, udev rules, icons and launchers with remote auto-compilation.
 
 set -g APP_NAME "xjemulator"
-set -g CURRENT_BRANCH "master"
+
+# Dynamic Branch Detection:
+# 1. Env Var (BRANCH)
+# 2. Local Git Branch (if inside a repo)
+# 3. Default to master
 if set -q BRANCH
-    set CURRENT_BRANCH $BRANCH
+    set -g CURRENT_BRANCH $BRANCH
+else if git rev-parse --abbrev-ref HEAD >/dev/null 2>&1
+    set -g CURRENT_BRANCH (git rev-parse --abbrev-ref HEAD)
+else
+    set -g CURRENT_BRANCH "master"
 end
 
 set -g REPO_URL "https://github.com/johancy96/XJemulator.git"

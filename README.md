@@ -9,11 +9,16 @@ XJemulator is a modern graphical application for Linux that allows you to interc
 ## 🚀 Fast Installation (Recommended)
 
 If you just want to install the program without downloading the entire repository, run this command in your terminal:
-If you just want to install the program without downloading the entire repository, run this command in your terminal:
 
-**For Bash / Zsh:**
+**Standard Installation (Master):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/scripts/install.sh | bash
+```
+
+**Specific Branch Installation (Remote):**
+If you want to test a development branch (e.g., `updates-testing`), use this command to ensure all assets are pulled from the correct branch:
+```bash
+BRANCH=updates-testing bash -c "$(curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/updates-testing/scripts/install.sh)"
 ```
 
 **For Fish:**
@@ -21,21 +26,25 @@ curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/scripts
 curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/scripts/install.fish | fish
 ```
 
+*For Fish specific branches:*
+```fish
+set -x BRANCH updates-testing; curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/updates-testing/scripts/install.fish | fish
+```
+
 ---
 
 ## 🗑 Fast Uninstallation
 
 If you want to completely remove XJemulator from your system:
-If you want to completely remove XJemulator from your system:
 
-**For Bash / Zsh:**
+**Standard Uninstallation:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/scripts/uninstall.sh | bash
 ```
 
-**For Fish:**
-```fish
-curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/scripts/uninstall.fish | fish
+**From Specific Branch:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/updates-testing/scripts/uninstall.sh | bash
 ```
 > *Note: To also remove your profiles and local configurations, add `--full` at the end: `| bash -s -- --full`*
 

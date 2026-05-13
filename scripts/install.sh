@@ -1,28 +1,19 @@
 #!/bin/bash
 
-# XJemulator - Modern Installation Script
-# Configura permisos, reglas udev y binarios sin necesidad de reiniciar.
+# XJemulator - Universal Installation Script (PRODUCTION READY)
+# Configura permisos, reglas udev, iconos y lanzadores.
 
 set -e
 
-# --- Configuracion Modular ---
+# --- Configuracion ---
 APP_NAME="xjemulator"
-
-# Detectar rama actual (Prioridad: Env Var BRANCH > Git Local > Default master)
-if [ -n "$BRANCH" ]; then
-    CURRENT_BRANCH="$BRANCH"
-elif git rev-parse --abbrev-ref HEAD &>/dev/null; then
-    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-else
-    CURRENT_BRANCH="master"
-fi
-
-REPO_RAW="https://raw.githubusercontent.com/johancy96/XJemulator/$CURRENT_BRANCH"
-# Nota: La lógica de descarga de udev ya busca en udev/, no necesita cambiar REPO_RAW aquí 
-# pero nos aseguramos de que sea consistente.
+# Por defecto master, pero se puede sobrescribir con BRANCH=nombre
+CURRENT_BRANCH="${BRANCH:-master}"
+REPO_BASE="https://raw.githubusercontent.com/johancy96/XJemulator/$CURRENT_BRANCH"
 BIN_DEST="/usr/local/bin/$APP_NAME"
-UDEV_RULE="99-$APP_NAME.rules"
-CONFIG_DIR="$HOME/.config/$APP_NAME/profiles"
+UDEV_DEST="/etc/udev/rules.d/99-$APP_NAME.rules"
+ICON_DEST="/usr/share/icons/hicolor/scalable/apps/$APP_NAME.svg"
+DESKTOP_DEST="/usr/share/applications/$APP_NAME.desktop"
 
 # Colores
 GREEN='\033[0;32m'
@@ -31,71 +22,78 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-echo -e "${BLUE}🚀 Iniciando instalacion profesional de XJemulator...${NC}"
-echo -e "${BLUE}📍 Rama detectada: ${YELLOW}$CURRENT_BRANCH${NC}"
+echo -e "${BLUE}🚀 Iniciando instalacion universal de XJemulator...${NC}"
 
-# 1. Verificacion de requisitos
+# 1. Verificacion de sudo
 if ! command -v sudo &> /dev/null; then
-    echo -e "${RED}❌ Error: Se requiere 'sudo' para configurar los permisos del sistema.${NC}"
+    echo -e "${RED}❌ Error: Se requiere 'sudo' para la instalacion.${NC}"
     exit 1
 fi
 
-# 2. Configuración del Kernel (uinput)
-echo -e "${YELLOW}🔧 Configurando modulo uinput...${NC}"
+# 2. Funcion de descarga segura
+download_asset() {
+    local remote_path="$1"
+    local local_path="$2"
+    local dest="$3"
+    
+    echo -e "${YELLOW}📥 Procesando $remote_path...${NC}"
+    if [ -f "$local_path" ]; then
+        sudo cp "$local_path" "$dest"
+    else
+        # Descarga desde GitHub con flag -f para fallar en 404
+        sudo curl -fsSL "$REPO_BASE/$remote_path" -o "$dest" || {
+            echo -e "${RED}❌ Error al descargar $remote_path desde $CURRENT_BRANCH${NC}"
+            exit 1
+        }
+    fi
+}
+
+# 3. Configurar Kernel y Reglas Udev
+echo -e "${YELLOW}🔧 Configurando hardware (uinput)...${NC}"
 sudo modprobe uinput || true
-# Asegurar persistencia del modulo tras reinicios
 echo "uinput" | sudo tee /etc/modules-load.d/$APP_NAME.conf > /dev/null
 
-# 3. Instalacion de Reglas Udev (Acceso instantaneo)
-echo -e "${YELLOW}📜 Instalando reglas udev (TAG+=uaccess)...${NC}"
-# Descargar regla directamente desde el repo si no existe localmente
-if [ -f "udev/$UDEV_RULE" ]; then
-    sudo cp "udev/$UDEV_RULE" "/etc/udev/rules.d/"
-else
-    curl -sSL "$REPO_RAW/udev/$UDEV_RULE" | sudo tee "/etc/udev/rules.d/$UDEV_RULE" > /dev/null
-fi
+download_asset "udev/99-xjemulator.rules" "udev/99-xjemulator.rules" "$UDEV_DEST"
 
-# Aplicar reglas sin reiniciar
 sudo udevadm control --reload-rules
 sudo udevadm trigger
+# Permiso inmediato
+sudo setfacl -m u:$USER:rw /dev/uinput || sudo chmod 666 /dev/uinput
 
-# 4. Permisos inmediatos para el usuario actual (Fallback de seguridad)
-echo -e "${YELLOW}🔑 Aplicando permisos de acceso inmediato...${NC}"
-if command -v setfacl &> /dev/null; then
-    sudo setfacl -m u:$USER:rw /dev/uinput || true
+# 4. Iconos y Lanzadores
+download_asset "assets/xjemulator.svg" "assets/xjemulator.svg" "$ICON_DEST"
+sudo gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+
+download_asset "assets/xjemulator.desktop" "assets/xjemulator.desktop" "$DESKTOP_DEST"
+sudo update-desktop-database /usr/share/applications || true
+
+# 5. Instalacion del Binario
+if [ -f "Cargo.toml" ]; then
+    echo -e "${YELLOW}🔨 Detectado codigo fuente. Compilando en modo release...${NC}"
+    if command -v cargo &> /dev/null; then
+        cargo build --release
+        sudo cp "target/release/$APP_NAME" "$BIN_DEST"
+    else
+        echo -e "${RED}❌ Error: 'cargo' (Rust) no esta instalado. No se puede compilar.${NC}"
+        exit 1
+    fi
+elif [ -f "target/release/$APP_NAME" ]; then
+    echo -e "${GREEN}📦 Usando binario ya compilado...${NC}"
+    sudo cp "target/release/$APP_NAME" "$BIN_DEST"
 else
-    # Fallback si acl no está instalado
-    sudo chmod 666 /dev/uinput || true
+    echo -e "${YELLOW}📥 No hay codigo fuente ni binario local. Descargando pre-compilado...${NC}"
+    sudo curl -fsSL "https://github.com/johancy96/XJemulator/releases/latest/download/xjemulator" -o "$BIN_DEST" || {
+        echo -e "${RED}❌ Error: No se pudo descargar ni compilar el binario.${NC}"
+        exit 1
+    }
 fi
 
-# 5. Instalación del Icono y Lanzador
-echo -e "${YELLOW}🖼️ Instalando icono y lanzador en el sistema...${NC}"
-ICON_PATH="/usr/share/icons/hicolor/scalable/apps/$APP_NAME.svg"
-DESKTOP_PATH="/usr/share/applications/$APP_NAME.desktop"
-
-if [ -f "assets/$APP_NAME.svg" ]; then
-    sudo mkdir -p /usr/share/icons/hicolor/scalable/apps/
-    sudo cp "assets/$APP_NAME.svg" "$ICON_PATH"
-    sudo gtk-update-icon-cache -f -t /usr/share/icons/hicolor || true
+if [ -f "$BIN_DEST" ]; then
+    sudo chmod +x "$BIN_DEST"
 fi
 
-if [ -f "assets/$APP_NAME.desktop" ]; then
-    sudo cp "assets/$APP_NAME.desktop" "$DESKTOP_PATH"
-    sudo update-desktop-database /usr/share/applications || true
-fi
+# 6. Estructura XDG
+mkdir -p ~/.config/$APP_NAME/profiles
 
-# 6. Preparar estructura XDG
-echo -e "${YELLOW}📁 Creando directorios de configuracion en ~/.config...${NC}"
-mkdir -p "$CONFIG_DIR"
-
-# 6. Instalacion del Binario (Solo si se solicita o no existe)
-if [[ "$1" == "--bin" ]]; then
-    echo -e "${YELLOW}📥 Descargando binario mas reciente...${NC}"
-    # Aquí iría la lógica de descarga del release (ejemplo)
-    # curl -L "URL_DEL_RELEASE" -o /tmp/$APP_NAME
-    # sudo install -m 755 /tmp/$APP_NAME "$BIN_DEST"
-fi
-
-echo -e "${GREEN}✅ Instalacion completada con exito!${NC}"
-echo -e "${BLUE}ℹ️  Ya puedes ejecutar XJemulator sin necesidad de reiniciar el equipo.${NC}"
-echo -e "${BLUE}ℹ️  Los perfiles se guardaran en: $CONFIG_DIR${NC}"
+echo -e "${GREEN}✅ ¡XJemulator instalado con éxito!${NC}"
+echo -e "${BLUE}ℹ️  Buscalo en tu lanzador de aplicaciones o ejecuta: $APP_NAME${NC}"

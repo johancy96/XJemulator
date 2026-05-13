@@ -3,16 +3,6 @@
 # XJemulator - Modern Uninstaller Script (Fish Version)
 # Revierte la instalacion# --- Configuracion Modular ---
 set -g APP_NAME "xjemulator"
-
-# Detección de rama (Por simetría con install.fish)
-if test -n "$BRANCH"
-    set CURRENT_BRANCH "$BRANCH"
-else if git rev-parse --abbrev-ref HEAD >/dev/null 2>&1
-    set CURRENT_BRANCH (git rev-parse --abbrev-ref HEAD)
-else
-    set CURRENT_BRANCH "master"
-end
-
 set -l UDEV_RULE "/etc/udev/rules.d/99-$APP_NAME.rules"
 set -l MODULE_CONF "/etc/modules-load.d/$APP_NAME.conf"
 set -l ICON_PATH "/usr/share/icons/hicolor/scalable/apps/$APP_NAME.svg"

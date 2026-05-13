@@ -26,9 +26,6 @@ To allow Linux to read your physical controllers and instantiate a new "Virtual 
    curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/scripts/install.fish | fish
    ```
 
-   > [!TIP]
-   > If you are testing a development branch, you can force the installation from that branch by setting the `BRANCH` variable: `BRANCH=dev curl ... | bash`.
-
 ---
 
 ## 🎮 Short Tutorial: How to Calibrate your First Controller

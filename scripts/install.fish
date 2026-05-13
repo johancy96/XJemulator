@@ -1,84 +1,99 @@
 #!/usr/bin/fish
 
-# XJemulator - Modern Installation Script (Fish Version)
-# Configura permisos, reglas udev y binarios sin necesidad de reiniciar.
+# XJemulator - Universal Installation Script (Fish Version - PRODUCTION READY)
+# Configura permisos, reglas udev, iconos y lanzadores.
 
-# Detectar rama actual
-# 1. Prioridad: Variable de entorno BRANCH
-# 2. Si es local: git branch
-# 3. Fallback: master (con aviso)
-if test -n "$BRANCH"
-    set CURRENT_BRANCH "$BRANCH"
-else if git rev-parse --abbrev-ref HEAD >/dev/null 2>&1
-    set CURRENT_BRANCH (git rev-parse --abbrev-ref HEAD)
-else
-    set CURRENT_BRANCH "master"
+set -g APP_NAME "xjemulator"
+set -g CURRENT_BRANCH "master"
+if set -q BRANCH
+    set CURRENT_BRANCH $BRANCH
 end
 
-set -g REPO_RAW "https://raw.githubusercontent.com/johancy96/XJemulator/$CURRENT_BRANCH"
+set -g REPO_BASE "https://raw.githubusercontent.com/johancy96/XJemulator/$CURRENT_BRANCH"
 set -g BIN_DEST "/usr/local/bin/$APP_NAME"
-set -g UDEV_RULE "99-$APP_NAME.rules"
-set -g CONFIG_DIR "$HOME/.config/$APP_NAME/profiles"
+set -g UDEV_DEST "/etc/udev/rules.d/99-$APP_NAME.rules"
+set -g ICON_DEST "/usr/share/icons/hicolor/scalable/apps/$APP_NAME.svg"
+set -g DESKTOP_DEST "/usr/share/applications/$APP_NAME.desktop"
 
-# Colores (Fish Style)
+# Colores
 set -l green (set_color green)
 set -l blue (set_color blue)
 set -l yellow (set_color yellow)
 set -l red (set_color red)
 set -l normal (set_color normal)
 
-echo -e "$blue🚀 Iniciando instalacion profesional de XJemulator (Fish Edition)...$normal"
-echo -e "$blue📍 Rama detectada: $yellow$CURRENT_BRANCH$normal"
+echo -e "$blue🚀 Iniciando instalacion universal de XJemulator (Fish Edition)...$normal"
 
-# 1. Verificacion de requisitos
+# 1. Verificacion de sudo
 if not command -v sudo >/dev/null
-    echo -e "$red❌ Error: Se requiere 'sudo' para configurar los permisos del sistema.$normal"
+    echo -e "$red❌ Error: Se requiere 'sudo' para la instalacion.$normal"
     exit 1
 end
 
-# 2. Configuración del Kernel (uinput)
-echo -e "$yellow🔧 Configurando modulo uinput...$normal"
+# 2. Funcion de descarga segura
+function download_asset
+    set -l remote_path $argv[1]
+    set -l local_path $argv[2]
+    set -l dest $argv[3]
+    
+    echo -e "$yellow📥 Procesando $remote_path...$normal"
+    if test -f "$local_path"
+        sudo cp "$local_path" "$dest"
+    else
+        sudo curl -fsSL "$REPO_BASE/$remote_path" -o "$dest"
+        if test $status -ne 0
+            echo -e "$red❌ Error al descargar $remote_path desde $CURRENT_BRANCH$normal"
+            exit 1
+        end
+    end
+end
+
+# 3. Configurar Hardware
+echo -e "$yellow🔧 Configurando hardware (uinput)...$normal"
 sudo modprobe uinput
 echo "uinput" | sudo tee /etc/modules-load.d/$APP_NAME.conf > /dev/null
 
-# 3. Instalacion de Reglas Udev
-echo -e "$yellow📜 Instalando reglas udev (TAG+=uaccess)...$normal"
-if test -f "udev/$UDEV_RULE"
-    sudo cp "udev/$UDEV_RULE" "/etc/udev/rules.d/"
-else
-    curl -sSL "$REPO_RAW/udev/$UDEV_RULE" | sudo tee "/etc/udev/rules.d/$UDEV_RULE" > /dev/null
-end
+download_asset "udev/99-xjemulator.rules" "udev/99-xjemulator.rules" "$UDEV_DEST"
 
 sudo udevadm control --reload-rules
 sudo udevadm trigger
+sudo setfacl -m u:$USER:rw /dev/uinput; or sudo chmod 666 /dev/uinput
 
-# 4. Permisos inmediatos
-echo -e "$yellow🔑 Aplicando permisos de acceso inmediato...$normal"
-if command -v setfacl >/dev/null
-    sudo setfacl -m u:$USER:rw /dev/uinput
+# 4. Iconos y Lanzadores
+download_asset "assets/xjemulator.svg" "assets/xjemulator.svg" "$ICON_DEST"
+sudo gtk-update-icon-cache -f -t /usr/share/icons/hicolor
+
+download_asset "assets/xjemulator.desktop" "assets/xjemulator.desktop" "$DESKTOP_DEST"
+sudo update-desktop-database /usr/share/applications
+
+# 5. Instalacion del Binario
+if test -f "Cargo.toml"
+    echo -e "$yellow🔨 Detectado codigo fuente. Compilando en modo release...$normal"
+    if command -v cargo >/dev/null
+        cargo build --release
+        sudo cp "target/release/$APP_NAME" "$BIN_DEST"
+    else
+        echo -e "$red❌ Error: 'cargo' (Rust) no esta instalado. No se puede compilar.$normal"
+        exit 1
+    end
+else if test -f "target/release/$APP_NAME"
+    echo -e "$green📦 Usando binario ya compilado...$normal"
+    sudo cp "target/release/$APP_NAME" "$BIN_DEST"
 else
-    sudo chmod 666 /dev/uinput
+    echo -e "$yellow📥 No hay codigo fuente ni binario local. Descargando pre-compilado...$normal"
+    sudo curl -fsSL "https://github.com/johancy96/XJemulator/releases/latest/download/xjemulator" -o "$BIN_DEST"
+    if test $status -ne 0
+        echo -e "$red❌ Error: No se pudo descargar ni compilar el binario.$normal"
+        exit 1
+    end
 end
 
-# 5. Icono y Lanzador
-echo -e "$yellow🖼️ Instalando icono y lanzador en el sistema...$normal"
-set -l ICON_PATH "/usr/share/icons/hicolor/scalable/apps/$APP_NAME.svg"
-set -l DESKTOP_PATH "/usr/share/applications/$APP_NAME.desktop"
-
-if test -f "assets/$APP_NAME.svg"
-    sudo mkdir -p /usr/share/icons/hicolor/scalable/apps/
-    sudo cp "assets/$APP_NAME.svg" "$ICON_PATH"
-    sudo gtk-update-icon-cache -f -t /usr/share/icons/hicolor
-end
-
-if test -f "assets/$APP_NAME.desktop"
-    sudo cp "assets/$APP_NAME.desktop" "$DESKTOP_PATH"
-    sudo update-desktop-database /usr/share/applications
+if test -f "$BIN_DEST"
+    sudo chmod +x "$BIN_DEST"
 end
 
 # 6. Estructura XDG
-echo -e "$yellow📁 Creando directorios de configuracion en ~/.config...$normal"
-mkdir -p "$CONFIG_DIR"
+mkdir -p ~/.config/$APP_NAME/profiles
 
-echo -e "$green✅ Instalacion completada con exito!$normal"
-echo -e "$blueℹ️  Ya puedes ejecutar XJemulator sin necesidad de reiniciar el equipo.$normal"
+echo -e "$green✅ ¡XJemulator instalado con éxito!$normal"
+echo -e "$blueℹ️  Buscalo en tu lanzador de aplicaciones o ejecuta: $APP_NAME$normal"

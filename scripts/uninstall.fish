@@ -1,7 +1,8 @@
 #!/usr/bin/fish
 
 # XJemulator - Modern Uninstaller Script (Fish Version)
-# Revierte la instalacion# --- Configuracion Modular ---
+# Reverts installation and cleans up the system professionally.
+
 set -g APP_NAME "xjemulator"
 set -l UDEV_RULE "/etc/udev/rules.d/99-$APP_NAME.rules"
 set -l MODULE_CONF "/etc/modules-load.d/$APP_NAME.conf"
@@ -10,68 +11,68 @@ set -l DESKTOP_PATH "/usr/share/applications/$APP_NAME.desktop"
 set -l BIN_PATH "/usr/local/bin/$APP_NAME"
 set -l CONFIG_DIR "$HOME/.config/$APP_NAME"
 
-# Colores (Fish Style)
+# Colors (Fish Style)
 set -l red (set_color red)
 set -l green (set_color green)
 set -l yellow (set_color yellow)
 set -l blue (set_color blue)
 set -l normal (set_color normal)
 
-echo -e "$blue🗑️ Iniciando desinstalacion de XJemulator (Fish Edition)...$normal"
+echo -e "$blue🗑️ Starting XJemulator uninstallation (Fish Edition)...$normal"
 
-# 1. Verificacion de sudo
+# 1. Sudo check
 if not command -v sudo >/dev/null
-    echo -e "$red❌ Error: Se requiere 'sudo' para eliminar archivos del sistema.$normal"
+    echo -e "$red❌ Error: 'sudo' is required to remove system files.$normal"
     exit 1
 end
 
-# 2. Eliminar Binario
-echo -e "$yellow📂 Eliminando binario...$normal"
+# 2. Remove Binary
+echo -e "$yellow📂 Removing binary...$normal"
 if test -f "$BIN_PATH"
     sudo rm -f "$BIN_PATH"
-    echo "  ✔ $BIN_PATH eliminado."
+    echo "  ✔ $BIN_PATH removed."
 end
 
-# 3. Revertir Configuracion del Sistema
-echo -e "$yellow🔧 Revirtiendo configuracion del sistema...$normal"
+# 3. Revert System Configuration
+echo -e "$yellow🔧 Reverting system configuration...$normal"
 
-# Reglas Udev
+# Udev Rules
 if test -f "$UDEV_RULE"
     sudo rm -f "$UDEV_RULE"
-    echo "  ✔ Reglas udev eliminadas."
+    echo "  ✔ Udev rules removed."
     sudo udevadm control --reload-rules
     sudo udevadm trigger
 end
 
-# Modulos
+# Modules
 if test -f "$MODULE_CONF"
     sudo rm -f "$MODULE_CONF"
-    echo "  ✔ Configuracion de modulos eliminada."
+    echo "  ✔ Kernel module configuration removed."
 end
 
-# Iconos y Lanzadores
+# Icons and Launchers
 if test -f "$ICON_PATH"
     sudo rm -f "$ICON_PATH"
     sudo gtk-update-icon-cache -f -t /usr/share/icons/hicolor
-    echo "  ✔ Icono eliminado."
+    echo "  ✔ Icon removed."
 end
 
 if test -f "$DESKTOP_PATH"
     sudo rm -f "$DESKTOP_PATH"
     sudo update-desktop-database /usr/share/applications
-    echo "  ✔ Lanzador .desktop eliminado."
+    echo "  ✔ .desktop launcher removed."
 end
 
-# 4. Limpieza de Datos de Usuario (Opcional)
+# 4. Cleanup User Data (Optional)
 if contains -- "--full" $argv
-    echo -e "$red⚠️  Limpieza completa solicitada. Eliminando configuracion de usuario...$normal"
+    echo -e "$red⚠️  Full cleanup requested. Removing user configuration...$normal"
     if test -d "$CONFIG_DIR"
         rm -rf "$CONFIG_DIR"
-        echo "  ✔ $CONFIG_DIR eliminado."
+        echo "  ✔ $CONFIG_DIR removed."
     end
 else
-    echo -e "$blueℹ️  Se han conservado tus perfiles en $CONFIG_DIR$normal"
-    echo -e "$blueℹ️  Usa '$yellow--full$blue' si deseas borrarlos tambien.$normal"
+    echo -e "$blueℹ️  User profiles kept at $CONFIG_DIR$normal"
+    echo -e "$blueℹ️  Use '$yellow--full$blue' if you want to delete them as well.$normal"
 end
 
-echo -e "\n$green✅ XJemulator ha sido desinstalado correctamente.$normal"
+echo -e "\n$green✅ XJemulator has been successfully uninstalled.$normal"

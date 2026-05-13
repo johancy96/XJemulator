@@ -5,8 +5,18 @@
 
 set -e
 
-# --- Configuracion Modular (Debe coincidir con install.sh) ---
+# --- Configuracion Modular ---
 APP_NAME="xjemulator"
+
+# Detección de rama (Por simetría con install.sh)
+if [ -n "$BRANCH" ]; then
+    CURRENT_BRANCH="$BRANCH"
+elif git rev-parse --abbrev-ref HEAD &>/dev/null; then
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+else
+    CURRENT_BRANCH="master"
+fi
+
 UDEV_RULE="/etc/udev/rules.d/99-$APP_NAME.rules"
 MODULE_CONF="/etc/modules-load.d/$APP_NAME.conf"
 ICON_PATH="/usr/share/icons/hicolor/scalable/apps/$APP_NAME.svg"

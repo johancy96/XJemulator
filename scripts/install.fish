@@ -3,15 +3,16 @@
 # XJemulator - Modern Installation Script (Fish Version)
 # Configura permisos, reglas udev y binarios sin necesidad de reiniciar.
 
-set -g APP_NAME "xjemulator"
-
 # Detectar rama actual
-set -g CURRENT_BRANCH "master"
-if git rev-parse --abbrev-ref HEAD >/dev/null 2>&1
+# 1. Prioridad: Variable de entorno BRANCH
+# 2. Si es local: git branch
+# 3. Fallback: master (con aviso)
+if test -n "$BRANCH"
+    set CURRENT_BRANCH "$BRANCH"
+else if git rev-parse --abbrev-ref HEAD >/dev/null 2>&1
     set CURRENT_BRANCH (git rev-parse --abbrev-ref HEAD)
-end
-if set -q BRANCH
-    set CURRENT_BRANCH $BRANCH
+else
+    set CURRENT_BRANCH "master"
 end
 
 set -g REPO_RAW "https://raw.githubusercontent.com/johancy96/XJemulator/$CURRENT_BRANCH"

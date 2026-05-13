@@ -7,8 +7,16 @@ set -e
 
 # --- Configuracion Modular ---
 APP_NAME="xjemulator"
-# Detectar rama actual (Prioridad: Env Var > Git > Default master)
-CURRENT_BRANCH="${BRANCH:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "master")}"
+
+# Detectar rama actual (Prioridad: Env Var BRANCH > Git Local > Default master)
+if [ -n "$BRANCH" ]; then
+    CURRENT_BRANCH="$BRANCH"
+elif git rev-parse --abbrev-ref HEAD &>/dev/null; then
+    CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+else
+    CURRENT_BRANCH="master"
+fi
+
 REPO_RAW="https://raw.githubusercontent.com/johancy96/XJemulator/$CURRENT_BRANCH"
 # Nota: La lógica de descarga de udev ya busca en udev/, no necesita cambiar REPO_RAW aquí 
 # pero nos aseguramos de que sea consistente.

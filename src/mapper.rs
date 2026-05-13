@@ -199,7 +199,6 @@ pub(crate) fn parse_key(s: &str) -> Result<Key, String> {
         "BTN_THUMB" => Ok(Key::BTN_THUMB),
         "BTN_THUMB2" => Ok(Key::BTN_THUMB2),
         "BTN_TOP" => Ok(Key::BTN_TOP),
-        "BTN_TOP2" => Ok(Key::BTN_TOP2),
         "BTN_PINKIE" => Ok(Key::BTN_PINKIE),
         "BTN_BASE" => Ok(Key::BTN_BASE),
         "BTN_JOYSTICK" => Ok(Key::BTN_JOYSTICK),

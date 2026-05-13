@@ -5,12 +5,14 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-pub(crate) fn calib_delta_threshold(abs: evdevil::event::Abs) -> i32 {
+pub(crate) fn calib_delta_threshold(abs: evdevil::event::Abs, hw: crate::gui::types::HardwareProfile) -> i32 {
     use evdevil::event::Abs;
+    use crate::gui::types::HardwareProfile;
+
     match abs {
         Abs::HAT0X | Abs::HAT0Y | Abs::HAT1X | Abs::HAT1Y => 1,
-        Abs::Z | Abs::RZ | Abs::GAS | Abs::BRAKE => 30,
-        _ => 40,
+        Abs::Z | Abs::RZ | Abs::GAS | Abs::BRAKE => 1000, // Gatillos requieren presión clara
+        _ => if hw == HardwareProfile::Modern { 5000 } else { 3000 }, // Palancas requieren movimiento real
     }
 }
 
@@ -18,6 +20,7 @@ pub(crate) fn detect_axis_movement(
     axis_values: &HashMap<evdevil::event::Abs, i32>,
     resting: &HashMap<evdevil::event::Abs, i32>,
     exclude_axes: &HashSet<evdevil::event::Abs>,
+    hw: crate::gui::types::HardwareProfile,
 ) -> Option<(evdevil::event::Abs, bool)> {
     let mut best_code: Option<evdevil::event::Abs> = None;
     let mut best_delta = 0i32;
@@ -29,7 +32,7 @@ pub(crate) fn detect_axis_movement(
         }
         let rest = resting.get(&code).copied().unwrap_or(0);
         let delta = cur - rest;
-        let thr = calib_delta_threshold(code);
+        let thr = calib_delta_threshold(code, hw);
         if delta.abs() >= thr && delta.abs() > best_delta.abs() {
             best_code = Some(code);
             best_delta = delta;

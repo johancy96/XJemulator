@@ -150,18 +150,23 @@ fn render_raw_monitor(app: &mut App, ui: &mut egui::Ui) {
     }
 }
 
-fn render_permissions_warning(_app: &mut App, ui: &mut egui::Ui) {
+fn render_permissions_warning(app: &mut App, ui: &mut egui::Ui) {
     egui::Frame::default()
-        .fill(Theme::ERROR.gamma_multiply(0.2))
+        .fill(Theme::ERROR.gamma_multiply(0.1))
         .stroke(egui::Stroke::new(1.0, Theme::ERROR))
         .corner_radius(egui::CornerRadius::same(8))
-        .inner_margin(10.0)
+        .inner_margin(12.0)
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("⚠️").size(20.0));
+                ui.label(egui::RichText::new("⚠️").size(24.0));
                 ui.vertical(|ui| {
-                    ui.label(egui::RichText::new("Permisos udev no detectados").strong());
-                    ui.label(egui::RichText::new("La emulación fallará sin permisos de escritura en /dev/uinput.").size(11.0));
+                    ui.label(egui::RichText::new(crate::i18n::t(&app.config.lang, "udev_error_title")).strong());
+                    ui.label(egui::RichText::new(crate::i18n::t(&app.config.lang, "udev_error_msg")).size(11.0));
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(crate::i18n::t(&app.config.lang, "btn_retry_udev")).clicked() {
+                        app.check_uinput_permission();
+                    }
                 });
             });
         });

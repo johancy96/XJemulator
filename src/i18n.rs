@@ -117,10 +117,14 @@ pub fn t<'a>(lang: &Lang, key: &'a str) -> &'a str {
         (Lang::En, "btn_cancel") => "Cancel",
 
         // --- UDEV STATUS ---
+        (Lang::Es, "udev_error_title") => "Permisos udev no detectados",
+        (Lang::En, "udev_error_title") => "udev permissions not detected",
+        (Lang::Es, "udev_error_msg") => "La emulación fallará sin permisos en /dev/uinput. Revisa la instalación.",
+        (Lang::En, "udev_error_msg") => "Emulation will fail without permissions in /dev/uinput. Check installation.",
+        (Lang::Es, "btn_retry_udev") => "Reintentar",
+        (Lang::En, "btn_retry_udev") => "Retry",
         (Lang::Es, "udev_warn") => "⚠️ Reglas udev no detectadas",
         (Lang::En, "udev_warn") => "⚠️ udev rules not detected",
-        (Lang::Es, "lbl_udev_req") => "La emulación fallará. Revisa la guía.",
-        (Lang::En, "lbl_udev_req") => "Emulation will fail. Check the guide.",
 
         // --- DEFAULT BUTTONS ---
         (Lang::Es, "btn_a") => "Botón A",

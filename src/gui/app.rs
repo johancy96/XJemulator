@@ -45,6 +45,8 @@ pub struct App {
     pub tray: Option<crate::gui::tray::TrayManager>,
     pub tray_rx: crossbeam_channel::Receiver<crate::gui::tray::TrayMsg>,
     pub quitting: bool,
+    pub hw_profile: crate::gui::types::HardwareProfile,
+    pub last_step_time: std::time::Instant,
 }
 
 impl App {
@@ -74,19 +76,26 @@ impl App {
             saved_profiles,
             status_msg: None,
             config: config.clone(),
-            uinput_ok: std::fs::OpenOptions::new().write(true).open("/dev/uinput").is_ok(),
+            uinput_ok: false,
             profiles_cache: Vec::new(),
             tray: None,
             tray_rx: crossbeam_channel::unbounded().1,
             quitting: false,
+            hw_profile: crate::gui::types::HardwareProfile::Generic,
+            last_step_time: std::time::Instant::now(),
         };
         
         let (tx, rx) = crossbeam_channel::unbounded();
         app.tray = Some(crate::gui::tray::TrayManager::new(&config.lang, tx));
         app.tray_rx = rx;
         
+        app.check_uinput_permission();
         app.refresh_profiles_cache();
         app
+    }
+
+    pub fn check_uinput_permission(&mut self) {
+        self.uinput_ok = std::fs::OpenOptions::new().write(true).open("/dev/uinput").is_ok();
     }
 
     pub fn refresh_profiles_cache(&mut self) {
@@ -106,7 +115,11 @@ impl App {
         if self.selected == Some(idx) { return; }
         self.selected = Some(idx);
         
-        if let Some(gp) = self.gamepads.get(idx).cloned() {
+        if let Some(gp) = self.gamepads[idx].clone().into() {
+            let gp: crate::scanner::GamepadInfo = gp;
+            // Detección de perfil de hardware por VID/PID
+            self.hw_profile = crate::gui::types::HardwareProfile::detect(gp.vendor_id, gp.product_id);
+            
             // Auto-detección: Buscar perfil que coincida con VID:PID
             self.try_auto_load_profile(gp.vendor_id, gp.product_id);
 
@@ -250,16 +263,29 @@ impl App {
                     let key_name = format!("{:?}", key);
                     self.calib_btns[idx].source = Some(key_name);
                     self.start_btn_cooldown();
+                    self.last_step_time = std::time::Instant::now();
                     self.calib_step = CalibStep::Buttons(idx + 1);
                     if idx + 1 >= self.calib_btns.len() {
                         self.capture_resting();
+                        // Al saltar a ejes, vaciamos la cola de botones para evitar ruidos
+                        if let Ok(mut cap) = self.raw_capture.lock() {
+                            cap.key_queue.clear();
+                        }
                         self.calib_step = CalibStep::Axes(0);
                     }
                 }
             }
             CalibStep::Axes(idx) => {
+                // Periodo de gracia para evitar auto-skip (1.2 segundos)
+                if self.last_step_time.elapsed() < std::time::Duration::from_millis(1200) {
+                    // Durante el periodo de gracia, re-capturamos el reposo continuamente
+                    // para neutralizar el drift que se "queda incrementado"
+                    self.capture_resting();
+                    return;
+                }
+
                 let detected = if let Ok(cap) = self.raw_capture.lock() {
-                    detect_axis_movement(&cap.axis_values, &self.axis_resting, &self.axes_used)
+                    crate::gui::backend::detect_axis_movement(&cap.axis_values, &self.axis_resting, &self.axes_used, self.hw_profile)
                 } else { None };
 
                 if let Some((axis, pos)) = detected {
@@ -268,6 +294,7 @@ impl App {
                     self.calib_axes[idx].invert = self.calib_axes[idx].positive_expected != pos;
                     self.axes_used.insert(axis);
                     self.start_axis_cooldown();
+                    self.last_step_time = std::time::Instant::now();
                     self.calib_step = CalibStep::Axes(idx + 1);
                     if idx + 1 >= self.calib_axes.len() {
                         self.calib_step = CalibStep::Review;
@@ -290,10 +317,55 @@ impl App {
         self.cooldown_until = Some(std::time::Instant::now() + std::time::Duration::from_millis(800));
     }
 
+    pub fn skip_calibration_step(&mut self) {
+        match self.calib_step {
+            CalibStep::Buttons(idx) => {
+                self.calib_btns[idx].source = None;
+                self.calib_step = CalibStep::Buttons(idx + 1);
+                if idx + 1 >= self.calib_btns.len() {
+                    self.capture_resting();
+                    self.calib_step = CalibStep::Axes(0);
+                }
+            }
+            _ => {}
+        }
+        self.start_btn_cooldown();
+    }
+
     fn capture_resting(&mut self) {
         if let Ok(cap) = self.raw_capture.lock() {
             self.axis_resting = cap.axis_values.clone();
         }
+    }
+
+    pub fn prev_calibration_step(&mut self) {
+        match self.calib_step {
+            CalibStep::Buttons(idx) if idx > 0 => {
+                self.calib_step = CalibStep::Buttons(idx - 1);
+            }
+            CalibStep::Axes(idx) => {
+                if idx == 0 {
+                    self.calib_step = CalibStep::Buttons(self.calib_btns.len() - 1);
+                } else {
+                    self.calib_step = CalibStep::Axes(idx - 1);
+                    // Al retroceder en ejes, reseteamos la detección de ejes para permitir re-captura limpia
+                    self.axes_used.clear();
+                    for i in 0..(idx - 1) {
+                        if let Some(ref src) = self.calib_axes[i].source {
+                            if let Some(abs_code) = crate::mapper::parse_abs(src).ok() {
+                                self.axes_used.insert(abs_code);
+                            }
+                        }
+                    }
+                }
+            }
+            CalibStep::Review => {
+                self.calib_step = CalibStep::Axes(self.calib_axes.len() - 1);
+            }
+            _ => {}
+        }
+        self.last_step_time = std::time::Instant::now();
+        self.start_btn_cooldown();
     }
 
     pub fn save_profile(&mut self) {
@@ -325,6 +397,11 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Re-comprobar permisos cada 2 segundos aproximadamente
+        if ctx.input(|i| i.time % 2.0 < 0.02) {
+            self.check_uinput_permission();
+        }
+
         // Procesar mensajes del System Tray
         while let Ok(msg) = self.tray_rx.try_recv() {
             match msg {
@@ -341,10 +418,8 @@ impl eframe::App for App {
 
         // Lógica de "Ocultar al Tray" en lugar de cerrar
         if ctx.input(|i| i.viewport().close_requested()) && !self.quitting {
-            if self.tray.is_some() {
-                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-            }
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
         }
 
         Theme::apply(ctx);

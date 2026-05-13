@@ -145,7 +145,7 @@ impl Mapper {
 }
 
 /// Parse an axis name string to an Abs value
-fn parse_abs(s: &str) -> Result<Abs, String> {
+pub(crate) fn parse_abs(s: &str) -> Result<Abs, String> {
     // evdevil uses serde with names like "X", "Y", "ABS_X" etc.
     // We handle both formats
     let normalized = s.strip_prefix("ABS_").unwrap_or(s);
@@ -174,7 +174,7 @@ fn parse_abs(s: &str) -> Result<Abs, String> {
 }
 
 /// Parse a button name string to a Key value
-fn parse_key(s: &str) -> Result<Key, String> {
+pub(crate) fn parse_key(s: &str) -> Result<Key, String> {
     match s {
         "BTN_A" => Ok(Key::BTN_A),
         "BTN_B" => Ok(Key::BTN_B),

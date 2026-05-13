@@ -1,73 +1,77 @@
-# XJemulator - Guía Oficial de Usuario 📖
+# XJemulator - Official User Guide 📖
 
 [🌍 English Version](file:///home/johancy/Proyectos/XJemulator/GUIDE_EN.md) / [🇪🇸 Versión en Español](file:///home/johancy/Proyectos/XJemulator/GUIDE.md)
 
-¡Bienvenido a XJemulator! Emulador gráfico de mandos genéricos a Xbox 360 para Linux. Aquí aprenderás a detectar, calibrar y emular de forma transparente tus gamepads para su perfecta compatibilidad con Steam, Proton y Wine.
+Welcome to XJemulator! A graphical generic controller to Xbox 360 emulator for Linux. Here you will learn to detect, calibrate and emulate your gamepads seamlessly for perfect compatibility with Steam, Proton and Wine.
 
 ---
 
-## ⚠️ Paso Crítico Cero: udev y Permisos
-Para que Linux permita que XJemulator lea tus mandos físicos e instancie un nuevo "Mando Virtual de Xbox 360", necesita acceso a los módulos de hardware.
+## ⚠️ Zero-Step: udev and Permissions
+To allow Linux to read your physical controllers and instantiate a new "Virtual Xbox 360 Controller", it needs access to hardware modules.
 
-1. **Agrega a tu usuario al grupo `input`**:
-   Ejecuta esto en tu terminal y **¡reinicia tu computadora / cierra sesión!**
+1. **Add your user to the `input` group**:
+   Run this in your terminal and **restart your computer / log out!**
    ```bash
    sudo usermod -aG input $USER
    ```
-2. **Verificar reglas udev**:
-   Normalmente, al instalar `XJemulator` la aplicación configura estas reglas de manera automática. 
-   **Si la instalación automática falló** o corres una copia manual, la aplicación mostrará una advertencia roja en pantalla. En dicho caso, ejecuta lo siguiente en tu terminal para instalarlas manualmente:
+2. **Verify udev rules**:
+   Normally, when installing `XJemulator`, the application configures these rules automatically. 
+   **If the automatic installation failed** or you run a manual copy, the application will display a red warning on-screen. In that case, run the following in your terminal to install them manually:
+   **Bash / Zsh:**
    ```bash
-   sudo sh -c 'curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/udev/99-xjemulator.rules > /etc/udev/rules.d/99-xjemulator.rules'
-   sudo udevadm control --reload-rules && sudo udevadm trigger
+   curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/scripts/install.sh | bash
+   ```
+   **Fish:**
+   ```fish
+   curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/scripts/install.fish | fish
    ```
 
 ---
 
-## 🎮 Tutorial Corto: Cómo Calibrar tu Primer Mando
+## 🎮 Short Tutorial: How to Calibrate your First Controller
 
-La calibración le "enseña" a la aplicación cuál botón de tu mando genérico se traduce a qué botón del estándar de Xbox 360. **Solo tendrás que hacer esto una vez por cada modelo de mando que tengas.**
+Calibration "teaches" the application which button of your generic controller translates to which button of the Xbox 360 standard. **You will only have to do this once for each model of controller you have.**
 
-### 1. Selecciona tu Mando (Panel Izquierdo)
-Conecta tu control genérico por USB o Bluetooth.
-En la parte izquierda encontrarás el área **"🔌 Mandos Detectados"**. Busca tu mando en la lista y presiona el rectángulo en la lista para seleccionarlo. En el Monitor RAW central deberían empezar a saltar códigos si oprimes los botones.
+### 1. Select your Controller (Left Panel)
+Connect your generic controller via USB or Bluetooth.
+On the left side, you'll find the **"🔌 Detected Controllers"** area. Find your controller in the list and press the rectangle in the list to select it. In the central RAW Monitor, codes should start jumping if you press the buttons.
 
-### 2. Inicia el Asistente de Calibración
-Una vez que el mando esté seleccionado en el menú izquierdo (y te asegures de que no esté emulando todavía mediante el botón rojo Detener), presiona el botón situado bajo el monitor central que dice **"▶ Iniciar calibración"**.
+### 2. Start the Calibration Assistant
+Once the controller is selected in the left menu (and you make sure it's not already emulating via the red Stop button), press the button located under the central monitor that says **"▶ Start calibration"**.
 
-### 3. Sigue las Instrucciones en Pantalla
-El sistema bloqueó y te guiará botón por botón:
-- **Calibrando Botones:** Aparecerá en color amarillo el nombre de un botón (Ej: "Botón A - El botón inferior (verde/azul)"). Simplemente **presiónalo fuerte** en tu mando de forma consecutiva. La interfaz lo detectará, pitará, y pasará al siguiente por su cuenta. 
-  > *Truco: Si tu mando no tiene algún botón avanzado (como un Botón "HOME" o "Guía"), haz clic en el hipervínculo en pantalla "Saltar (No Mapear)"*.
-- **Calibrando Ejes (Palancas y Gatillos):** Las palancas requieren de precisión. Sigue la instrucción textual, si dice "Palanca Izquierda -> empuja hacia ABAJO", la empujas y sostienes hasta hacer tope.
-  Luego espera la instrucción **"✅ ¡Detectado! Suelta el control y vuelve al centro..."**. Solo entonces puedes aflojar la presión para que el emulador detecte el punto neutro de resorte.
-  > *Después de detectar el centro, en ocasiones el sistema te sugerirá "¿Invertir dirección?". Presiona simplemente "Aceptar y Continuar" salvo que el joystick se porte extraño en un juego.*
+### 3. Follow the On-Screen Instructions
+The system will guide you button by button:
+- **Calibrating Buttons:** The name of a button will appear in yellow (e.g., "Button A - The bottom button (green/blue)"). Simply **press it hard** on your controller consecutively. The interface will detect it, beep, and move on to the next one on its own.
+  > *Tip: If your controller doesn't have an advanced button (like a "HOME" or "Guide" Button), click the on-screen hyperlink "Skip (Do Not Map)"*.
+- **Calibrating Axes (Sticks and Triggers):** Sticks require precision. Follow the textual instruction; if it says "Left Stick -> push DOWN", push and hold it until it stops.
+  Then wait for the instruction **"✅ Detected! Release the controller and return to the center..."**. Only then can you loosen the pressure so that the emulator detects the neutral spring point.
+  > *After detecting the center, sometimes the system will suggest "¿Invert direction?". Just press "Accept and Continue" unless the joystick behaves strangely in a game.*
 
-### 4. Guarda tu Perfil
-Al finalizar todos los ejes, te saldrá un mensaje de **"¡Calibración Completada!"**. 
-Escribe el nombre con el cual identificarás a tu control (Ej: `mando_ps3_azul`) en el cuadro superior y presiona el botón **💾 Guardar Perfil y Finalizar**. Este perfil se guardará y aparecerá para siempre en tu panel lateral derecho.
-
----
-
-## 🚀 Uso Diario: Activar la Emulación
-
-¡A jugar! Una vez hayas realizado la configuración descrita, solo te toma **un clic** cada día que desees jugar:
-1. Conecta tu mando y abre XJemulator.
-2. Búscalo en la lista izquierda, localiza su recuadro y presiona el botón de **"▶ (Play) Emulador "**.
-
-Un indicador verde comenzará a rotar sobre el perfil del mando en la interfaz de la aplicación, indicándolo como "Activo". Mientras la app permanezca abierta minimizada en tu Linux, tu computadora creerá tener conectado por USB un genuino `Microsoft X-Box 360 pad`. ¡Abre Steam y disfruta!.
+### 4. Save your Profile
+After finishing all the axes, you'll get a **"Calibration Completed!"** message.
+Type the name by which you'll identify your control (e.g., `ps3_blue_controller`) in the top box and press the **💾 Save Profile and Finish** button. This profile will be saved and will appear forever in your right side panel.
 
 ---
 
-## ⚕️ Resolución de Problemas (Troubleshooting)
+## 🚀 Daily Use: Activating Emulation
 
-### El emulador no crea el dispositivo virtual (Proton no responde)
-- Asegúrate de haber completado y reiniciado tras seguir el Paso 0 ("Grupo input").
-- Verifica en la barra estática de arriba que diga con orgullo `✓ udev instalado`. 
+Time to play! Once you've performed the configuration described above, it only takes **one click** each day you want to play:
+1. Connect your controller and open XJemulator.
+2. Find it in the left list, locate its box, and press the **"▶ (Play) Emulator"** button.
 
-### Proton / Steam / Wine no detectan el Xbox 360 incluso cuando emula
-- Ve al modo **Steam Big Picture > Parámetros > Controlador** y verifica si está activa la compatibilidad con Mandos de Xbox.
-- Desactiva el soporte a "Mandos genéricos" del menú de Steam para evitar interferencia de capa doble con el mando falso. Evita presionar comandos mientras carga.
+A green indicator will start rotating over the controller profile in the application interface, indicating it as "Active". While the app remains open minimized in your Linux, your computer will believe it has a genuine `Microsoft X-Box 360 pad` connected via USB. Open Steam and enjoy!
 
-### Mis personajes en X juego "caminan solos" (Drift Extremo / Phantom inputs)
-- Esto ocurre cuando la lectura RAW del mando descansa fuera de límites. Vuelve a calibrar el mando deteniéndote minuciosamente donde el asistente pide *"Suelta el control y vuelve al centro"*, dándole el punto inerte original al controlador.
+---
+
+## ⚕️ Troubleshooting
+
+### The emulator does not create the virtual device (Proton does not respond)
+- Make sure you have completed and restarted after following Step 0 ("input group").
+- Check the static bar at the top; it should proudly say `✓ udev installed`.
+
+### Proton / Steam / Wine do not detect the Xbox 360 even when emulating
+- Go to **Steam Big Picture mode > Settings > Controller** and check if Xbox Controller support is active.
+- Disable "Generic Controllers" support in the Steam menu to avoid double-layer interference with the simulated controller. Avoid pressing commands while loading.
+
+### My characters in X game "walk alone" (Extreme Drift / Phantom inputs)
+- This occurs when the RAW reading of the controller rests outside limits. Re-calibrate the controller by stopping carefully where the assistant asks *"Release the controller and return to center"*, giving the controller its original neutral point.

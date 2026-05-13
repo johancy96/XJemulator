@@ -1,9 +1,9 @@
 mod config;
+mod paths;
 pub mod error;
 mod gui;
 mod i18n;
 mod mapper;
-pub mod reader;
 mod scanner;
 mod virtual_device;
 mod xbox_descriptor;

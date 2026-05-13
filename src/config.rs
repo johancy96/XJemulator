@@ -16,17 +16,12 @@ impl Default for AppConfig {
 
 impl AppConfig {
     pub fn load() -> Self {
-        if let Ok(content) = fs::read_to_string("config.toml") {
+        let path = crate::paths::AppPaths::config_file();
+        if let Ok(content) = fs::read_to_string(path) {
             if let Ok(config) = toml::from_str(&content) {
                 return config;
             }
         }
         Self::default()
-    }
-
-    pub fn save(&self) {
-        if let Ok(content) = toml::to_string(self) {
-            let _ = fs::write("config.toml", content);
-        }
     }
 }

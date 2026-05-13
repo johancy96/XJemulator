@@ -190,6 +190,30 @@ pub fn t<'a>(lang: &Lang, key: &'a str) -> &'a str {
         (Lang::En, "dir_up") => "push UP  ▲",
         (Lang::Es, "dir_press") => "apriétalo a FONDO  ⬇",
         (Lang::En, "dir_press") => "press fully DOWN  ⬇",
+        
+        // --- NEW MODERN UI ---
+        (Lang::Es, "calib_step_buttons") => "PASO 1: BOTONES",
+        (Lang::En, "calib_step_buttons") => "STEP 1: BUTTONS",
+        (Lang::Es, "calib_step_axes") => "PASO 2: EJES",
+        (Lang::En, "calib_step_axes") => "STEP 2: AXES",
+        (Lang::Es, "calib_review_title") => "REVISIÓN FINAL",
+        (Lang::En, "calib_review_title") => "FINAL REVIEW",
+        (Lang::Es, "btn_save_profile_action") => "💾 GUARDAR PERFIL",
+        (Lang::En, "btn_save_profile_action") => "💾 SAVE PROFILE",
+        (Lang::Es, "lbl_emulating_active") => "🎮 EMULANDO ACTIVAMENTE",
+        (Lang::En, "lbl_emulating_active") => "🎮 ACTIVELY EMULATING",
+        (Lang::Es, "lbl_select_to_start") => "Selecciona un mando para comenzar",
+        (Lang::En, "lbl_select_to_start") => "Select a gamepad to start",
+        
+        (Lang::Es, "nav_dashboard") => "Dashboard",
+        (Lang::En, "nav_dashboard") => "Dashboard",
+        (Lang::Es, "nav_profiles") => "Perfiles",
+        (Lang::En, "nav_profiles") => "Profiles",
+        
+        (Lang::Es, "tray_show") => "Mostrar Ventana",
+        (Lang::En, "tray_show") => "Show Window",
+        (Lang::Es, "tray_quit") => "Salir de XJEmulator",
+        (Lang::En, "tray_quit") => "Quit XJEmulator",
 
         // Default catch
         (_, k) => k,

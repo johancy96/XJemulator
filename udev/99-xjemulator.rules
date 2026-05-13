@@ -2,9 +2,8 @@
 # Instalar: sudo cp 99-xjemulator.rules /etc/udev/rules.d/
 # Recargar: sudo udevadm control --reload-rules && sudo udevadm trigger
 
-# Permitir acceso al dispositivo uinput para el grupo input
-# Necesario para crear dispositivos virtuales sin sudo
-KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
+# Permitir acceso al dispositivo uinput al usuario activo (vía uaccess)
+KERNEL=="uinput", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"
 
 # Asegurar que el dispositivo virtual Xbox 360 tenga permisos correctos
 # y sea detectado como joystick por el sistema

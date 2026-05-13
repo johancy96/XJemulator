@@ -7,6 +7,8 @@ use tracing::{debug, info, warn};
 pub struct GamepadInfo {
     pub path: String,
     pub name: String,
+    pub vendor_id: u16,
+    pub product_id: u16,
 }
 
 /// Check if a device is likely a gamepad/joystick
@@ -75,8 +77,8 @@ pub fn scan_gamepads() -> Vec<GamepadInfo> {
         let name = device.name().unwrap_or_else(|_| "Desconocido".into());
         let _phys = device.phys().unwrap_or(None);
         let input_id = device.input_id().ok();
-        let _vendor_id = input_id.map(|id| id.vendor()).unwrap_or(0);
-        let _product_id = input_id.map(|id| id.product()).unwrap_or(0);
+        let vendor_id = input_id.map(|id| id.vendor()).unwrap_or(0);
+        let product_id = input_id.map(|id| id.product()).unwrap_or(0);
 
         let axes_count = device
             .supported_abs_axes()
@@ -89,13 +91,15 @@ pub fn scan_gamepads() -> Vec<GamepadInfo> {
             .unwrap_or(0);
 
         info!(
-            "Gamepad detectado: {} [{}] - {} ejes, {} botones",
-            name, path_str, axes_count, buttons_count
+            "Gamepad detectado: {} [{}] ({:04x}:{:04x}) - {} ejes, {} botones",
+            name, path_str, vendor_id, product_id, axes_count, buttons_count
         );
 
         gamepads.push(GamepadInfo {
             path: path_str,
             name,
+            vendor_id,
+            product_id,
         });
     }
 

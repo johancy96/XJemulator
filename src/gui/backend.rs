@@ -1,57 +1,53 @@
 use super::types::{AxisSlot, BtnSlot, RawCapture};
-use crate::mapper::Mapper;
+use crate::mapper::{parse_abs, Mapper};
 use crate::virtual_device::VirtualXbox360;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-pub(crate) fn calib_delta_threshold(name: &str) -> i32 {
-    if name.contains("HAT") {
-        1
-    } else if name.ends_with('Z') || name.contains("GAS") || name.contains("BRAKE") {
-        30
-    } else {
-        40
+pub(crate) fn calib_delta_threshold(abs: evdevil::event::Abs) -> i32 {
+    use evdevil::event::Abs;
+    match abs {
+        Abs::HAT0X | Abs::HAT0Y | Abs::HAT1X | Abs::HAT1Y => 1,
+        Abs::Z | Abs::RZ | Abs::GAS | Abs::BRAKE => 30,
+        _ => 40,
     }
 }
 
 pub(crate) fn detect_axis_movement(
-    axis_values: &HashMap<String, i32>,
-    resting: &HashMap<String, i32>,
-    exclude_axes: &HashSet<String>,
-) -> Option<(String, bool)> {
-    let mut best_name = String::new();
+    axis_values: &HashMap<evdevil::event::Abs, i32>,
+    resting: &HashMap<evdevil::event::Abs, i32>,
+    exclude_axes: &HashSet<evdevil::event::Abs>,
+) -> Option<(evdevil::event::Abs, bool)> {
+    let mut best_code: Option<evdevil::event::Abs> = None;
     let mut best_delta = 0i32;
     let mut best_pos = true;
 
-    for (name, &cur) in axis_values {
-        if exclude_axes.contains(name) {
+    for (&code, &cur) in axis_values {
+        if exclude_axes.contains(&code) {
             continue;
         }
-        let rest = resting.get(name).copied().unwrap_or(0);
+        let rest = resting.get(&code).copied().unwrap_or(0);
         let delta = cur - rest;
-        let thr = calib_delta_threshold(name);
+        let thr = calib_delta_threshold(code);
         if delta.abs() >= thr && delta.abs() > best_delta.abs() {
-            best_name = name.clone();
+            best_code = Some(code);
             best_delta = delta;
             best_pos = delta > 0;
         }
     }
 
-    if best_name.is_empty() {
-        None
-    } else {
-        Some((best_name, best_pos))
-    }
+    best_code.map(|code| (code, best_pos))
 }
 
 pub(crate) fn scan_profiles() -> Vec<String> {
     let mut v = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(".") {
+    let dir = crate::paths::AppPaths::profiles_dir();
+    if let Ok(entries) = std::fs::read_dir(dir) {
         for e in entries.flatten() {
             if e.file_type().map(|t| t.is_file()).unwrap_or(false) {
                 let name = e.file_name().to_string_lossy().to_string();
-                if name.ends_with(".toml") && name != "Cargo.toml" && name != "config.toml" {
+                if name.ends_with(".toml") {
                     v.push(name);
                 }
             }
@@ -63,7 +59,8 @@ pub(crate) fn scan_profiles() -> Vec<String> {
 
 pub(crate) fn load_best_profile(profiles: &[String]) -> (Mapper, Option<String>) {
     for name in profiles {
-        if let Ok(content) = std::fs::read_to_string(name) {
+        let path = crate::paths::AppPaths::profile_path(name);
+        if let Ok(content) = std::fs::read_to_string(path) {
             if let Ok(p) = toml::from_str::<crate::mapper::MappingProfile>(&content) {
                 if let Ok(m) = Mapper::from_profile(&p) {
                     return (m, Some(name.clone()));
@@ -74,16 +71,22 @@ pub(crate) fn load_best_profile(profiles: &[String]) -> (Mapper, Option<String>)
     (Mapper::identity(), None)
 }
 
-pub(crate) fn generate_profile_toml(
+pub(crate) fn generate_profile_toml_with_ids(
     btns: &[BtnSlot],
     axes: &[AxisSlot],
     name: &str,
-    resting: &HashMap<String, i32>,
+    resting: &HashMap<evdevil::event::Abs, i32>,
+    vid: Option<u16>,
+    pid: Option<u16>,
 ) -> String {
     let mut t = format!(
-        "name = {:?}\ndescription = \"Calibrado con XJEmulator\"\n\n",
+        "name = {:?}\ndescription = \"Calibrado con XJEmulator\"\n",
         name
     );
+
+    if let Some(v) = vid { t.push_str(&format!("vendor_id = {}\n", v)); }
+    if let Some(p) = pid { t.push_str(&format!("product_id = {}\n", p)); }
+    t.push_str("\n");
 
     let mut written_axes: HashSet<&str> = HashSet::new();
 
@@ -95,7 +98,7 @@ pub(crate) fn generate_profile_toml(
                 } else {
                     8000
                 };
-                let center = resting.get(src).copied().unwrap_or(0);
+                let center = resting.get(&parse_abs(src).unwrap_or(evdevil::event::Abs::X)).copied().unwrap_or(0);
 
                 let mut scale = 1.0;
                 if let Some(mv) = ax.max_val {
@@ -173,19 +176,17 @@ pub(crate) fn raw_reader_loop(
         for ev in &buf[..count] {
             match ev.kind() {
                 EventKind::Key(ke) => {
-                    let name = format!("{:?}", ke.key());
+                    let key = ke.key();
                     if ke.state() == KeyState::PRESSED {
-                        if cap.pressed_keys.insert(name.clone()) {
-                            cap.key_queue.push_back(name);
+                        if cap.pressed_keys.insert(key) {
+                            cap.key_queue.push_back(key);
                         }
                     } else {
-                        cap.pressed_keys.remove(&name);
+                        cap.pressed_keys.remove(&key);
                     }
                 }
                 EventKind::Abs(ae) => {
-                    let name = format!("{:?}", ae.abs());
-                    let value = ae.value();
-                    cap.axis_values.insert(name, value);
+                    cap.axis_values.insert(ae.abs(), ae.value());
                 }
                 _ => {}
             }
@@ -228,25 +229,23 @@ pub(crate) fn emulation_loop(
             continue;
         }
 
-        let mut out: Vec<InputEvent> = Vec::new();
+        let mut out: Vec<InputEvent> = Vec::with_capacity(count + 1);
 
         if let Ok(mut cap) = capture.lock() {
             for ev in &buf[..count] {
                 match ev.kind() {
                     EventKind::Abs(ae) => {
                         if let Some((target, mapped)) = mapper.map_axis(ae.abs(), ae.value()) {
-                            let tname = format!("{:?}", target);
-                            cap.axis_values.insert(tname, mapped);
+                            cap.axis_values.insert(target, mapped);
                             out.push(AbsEvent::new(target, mapped).into());
                         }
                     }
                     EventKind::Key(ke) => {
                         if let Some(target) = mapper.map_button(ke.key()) {
-                            let tname = format!("{:?}", target);
                             if ke.state() == KeyState::PRESSED {
-                                cap.pressed_keys.insert(tname);
+                                cap.pressed_keys.insert(target);
                             } else {
-                                cap.pressed_keys.remove(&tname);
+                                cap.pressed_keys.remove(&target);
                             }
                             out.push(KeyEvent::new(target, ke.state()).into());
                         }
@@ -257,6 +256,8 @@ pub(crate) fn emulation_loop(
         }
 
         if !out.is_empty() {
+            // Sincronización explícita del Kernel para 0 latencia visual
+            out.push(evdevil::event::SynEvent::new(evdevil::event::Syn::REPORT).into());
             if let Err(e) = vx.write_batch(&out) {
                 tracing::error!("Error emulando: {}", e);
                 break;

@@ -2,9 +2,15 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Clone, Default)]
 pub(crate) struct RawCapture {
-    pub key_queue: VecDeque<String>,
-    pub pressed_keys: HashSet<String>,
-    pub axis_values: HashMap<String, i32>,
+    pub key_queue: VecDeque<evdevil::event::Key>,
+    pub pressed_keys: HashSet<evdevil::event::Key>,
+    pub axis_values: HashMap<evdevil::event::Abs, i32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppView {
+    Dashboard,
+    Profiles,
 }
 
 #[derive(Debug, Clone, PartialEq)]

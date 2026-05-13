@@ -41,6 +41,15 @@ curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/master/scripts
 
 ---
 
+### 🧪 Testing Branches
+If you want to test a specific development branch (e.g., `updates-testing`), you can override the branch detection:
+```bash
+# Example for Bash/Zsh
+BRANCH=your-branch bash -c "$(curl -fsSL https://raw.githubusercontent.com/johancy96/XJemulator/your-branch/scripts/install.sh)"
+```
+
+---
+
 We have integrated automatic tools to make compiling XJemulator and generating installers directly for your distribution a hassle-free process.
 
 ### Step 1: Install System Dependencies

@@ -67,7 +67,15 @@ fn draw_button(painter: &egui::Painter, pos: Pos2, key: &str, highlight: Option<
 }
 
 fn draw_stick(painter: &egui::Painter, pos: Pos2, axis: &str, highlight_axis: Option<&str>, highlight_btn: bool) {
-    let active = highlight_axis == Some(axis) || highlight_axis == Some("ABS_Y") || highlight_axis == Some("ABS_RY") || highlight_btn;
+    let is_left = axis == "ABS_X" || axis == "ABS_Y";
+    let is_right = axis == "ABS_RX" || axis == "ABS_RY";
+    
+    let active = match highlight_axis {
+        Some("ABS_X") | Some("ABS_Y") if is_left => true,
+        Some("ABS_RX") | Some("ABS_RY") if is_right => true,
+        _ => highlight_btn,
+    };
+
     let color = if active { Theme::ACCENT } else { Color32::from_gray(45) };
     painter.circle(pos, 22.0, color, Stroke::new(2.0, Color32::WHITE));
 }

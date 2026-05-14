@@ -15,11 +15,11 @@ impl Default for Lang {
 pub fn t<'a>(lang: &Lang, key: &'a str) -> &'a str {
     match (lang, key) {
         // --- COMMON / APP ---
-        (_, "app_title") => "🎮 XJEmulator",
-        (Lang::Es, "btn_stop_all") => "⏹ Detener Todos",
-        (Lang::En, "btn_stop_all") => "⏹ Stop All",
-        (Lang::Es, "btn_refresh") => "🔄 Refrescar",
-        (Lang::En, "btn_refresh") => "🔄 Refresh",
+        (_, "app_title") => "XJEmulator",
+        (Lang::Es, "btn_stop_all") => "\u{e46c} Detener Todos",
+        (Lang::En, "btn_stop_all") => "\u{e46c} Stop All",
+        (Lang::Es, "btn_refresh") => "Actualizar",
+        (Lang::En, "btn_refresh") => "Refresh",
         (Lang::Es, "lbl_active_emulators") => "emuladores Xbox 360 activos",
         (Lang::En, "lbl_active_emulators") => "active Xbox 360 emulators",
 
@@ -56,8 +56,8 @@ pub fn t<'a>(lang: &Lang, key: &'a str) -> &'a str {
         (Lang::En, "lbl_calib_wiz") => "Calibration Wizard",
         (Lang::Es, "lbl_profile_name") => "Nombre del nuevo perfil:",
         (Lang::En, "lbl_profile_name") => "New profile name:",
-        (Lang::Es, "btn_start_calib") => "▶ Iniciar calibración",
-        (Lang::En, "btn_start_calib") => "▶ Start calibration",
+        (Lang::Es, "btn_start_calib") => "\u{e3d0} Iniciar calibración",
+        (Lang::En, "btn_start_calib") => "\u{e3d0} Start calibration",
         (Lang::Es, "warning_busy") => {
             "⚠️ ESTE MANDO ESTÁ ACTIVO\nDetén el emulador de este mando\npara poder calibrarlo."
         }
@@ -123,8 +123,8 @@ pub fn t<'a>(lang: &Lang, key: &'a str) -> &'a str {
         (Lang::En, "udev_error_msg") => "Emulation will fail without permissions in /dev/uinput. Check installation.",
         (Lang::Es, "btn_retry_udev") => "Reintentar",
         (Lang::En, "btn_retry_udev") => "Retry",
-        (Lang::Es, "udev_warn") => "⚠️ Reglas udev no detectadas",
-        (Lang::En, "udev_warn") => "⚠️ udev rules not detected",
+        (Lang::Es, "udev_warn") => "\u{e4e0} Reglas udev no detectadas",
+        (Lang::En, "udev_warn") => "\u{e4e0} udev rules not detected",
 
         // --- DEFAULT BUTTONS ---
         (Lang::Es, "btn_a") => "Botón A",
@@ -213,11 +213,6 @@ pub fn t<'a>(lang: &Lang, key: &'a str) -> &'a str {
         (Lang::En, "nav_dashboard") => "Dashboard",
         (Lang::Es, "nav_profiles") => "Perfiles",
         (Lang::En, "nav_profiles") => "Profiles",
-        
-        (Lang::Es, "tray_show") => "Mostrar Ventana",
-        (Lang::En, "tray_show") => "Show Window",
-        (Lang::Es, "tray_quit") => "Salir de XJEmulator",
-        (Lang::En, "tray_quit") => "Quit XJEmulator",
 
         // Default catch
         (_, k) => k,

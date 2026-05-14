@@ -35,9 +35,9 @@ pub fn draw_device_card(
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         if emulating {
-                            ui.colored_label(Theme::SUCCESS, "●");
+                            ui.colored_label(Theme::SUCCESS, crate::gui::fonts::icons::CHECK_CIRCLE);
                         } else {
-                            ui.colored_label(Theme::TEXT_DIM, "○");
+                            ui.colored_label(Theme::TEXT_DIM, crate::gui::fonts::icons::GAMEPAD);
                         }
                         let resp = ui.selectable_label(false, egui::RichText::new(name).strong().size(14.0));
                         if resp.clicked() {
@@ -49,11 +49,11 @@ pub fn draw_device_card(
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if emulating {
-                        if ui.button(egui::RichText::new("⏹").color(Theme::ERROR)).clicked() {
+                        if ui.button(egui::RichText::new(crate::gui::fonts::icons::STOP).color(Theme::ERROR)).clicked() {
                             stop_clicked = true;
                         }
                     } else if selected {
-                        if ui.button(egui::RichText::new("▶").color(Theme::SUCCESS)).clicked() {
+                        if ui.button(egui::RichText::new(crate::gui::fonts::icons::PLAY).color(Theme::SUCCESS)).clicked() {
                             start_clicked = true;
                         }
                     }

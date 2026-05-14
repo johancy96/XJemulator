@@ -2,6 +2,8 @@ use evdevil::event::{EventType, Key};
 use evdevil::Evdev;
 use tracing::{debug, info, warn};
 
+use std::collections::HashMap;
+
 /// Information about a detected gamepad
 #[derive(Debug, Clone)]
 pub struct GamepadInfo {
@@ -9,6 +11,7 @@ pub struct GamepadInfo {
     pub name: String,
     pub vendor_id: u16,
     pub product_id: u16,
+    pub axis_ranges: HashMap<evdevil::event::Abs, (i32, i32)>, // (min, max)
 }
 
 /// Check if a device is likely a gamepad/joystick
@@ -80,10 +83,14 @@ pub fn scan_gamepads() -> Vec<GamepadInfo> {
         let vendor_id = input_id.map(|id| id.vendor()).unwrap_or(0);
         let product_id = input_id.map(|id| id.product()).unwrap_or(0);
 
-        let axes_count = device
-            .supported_abs_axes()
-            .map(|a| a.iter().count())
-            .unwrap_or(0);
+        let mut axis_ranges = HashMap::new();
+        if let Ok(axes) = device.supported_abs_axes() {
+            for axis in axes {
+                if let Ok(info) = device.abs_info(axis) {
+                    axis_ranges.insert(axis, (info.minimum(), info.maximum()));
+                }
+            }
+        }
 
         let buttons_count = device
             .supported_keys()
@@ -92,7 +99,7 @@ pub fn scan_gamepads() -> Vec<GamepadInfo> {
 
         info!(
             "Gamepad detectado: {} [{}] ({:04x}:{:04x}) - {} ejes, {} botones",
-            name, path_str, vendor_id, product_id, axes_count, buttons_count
+            name, path_str, vendor_id, product_id, axis_ranges.len(), buttons_count
         );
 
         gamepads.push(GamepadInfo {
@@ -100,6 +107,7 @@ pub fn scan_gamepads() -> Vec<GamepadInfo> {
             name,
             vendor_id,
             product_id,
+            axis_ranges,
         });
     }
 

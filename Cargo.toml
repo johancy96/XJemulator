@@ -1,6 +1,6 @@
 [package]
 name = "xjemulator"
-version = "0.1.0"
+version = "1.0.0"
 description = "A dynamic GUI to emulate virtual Xbox 360 controllers on Linux via evdevil/uinput."
 edition = "2021"
 license = "MIT"
@@ -14,14 +14,13 @@ serde = { version = "1.0", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "1.0"
-ksni = "0.2"
-crossbeam-channel = "0.5"
 image = "0.24"
 directories = "6.0"
+chrono = "0.4"
 
 [package.metadata.deb]
 maintainer = "Johancy <johancy@local>"
-copyright = "2024, Johancy"
+copyright = "2026, Johancy"
 license-file = ["LICENSE", "4"]
 depends = "$auto"
 section = "utility"

@@ -30,6 +30,14 @@ impl AppPaths {
         Self::config_dir().join("config.toml")
     }
 
+    pub fn telemetry_dir() -> PathBuf {
+        let dir = Self::config_dir().join("telemetry");
+        if !dir.exists() {
+            let _ = fs::create_dir_all(&dir);
+        }
+        dir
+    }
+
     pub fn profile_path(name: &str) -> PathBuf {
         let mut path = Self::profiles_dir().join(name);
         if path.extension().is_none() {

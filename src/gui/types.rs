@@ -13,25 +13,6 @@ pub enum AppView {
     Profiles,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HardwareProfile {
-    Generic,   // Mandos viejos o genéricos (Baja resolución, más tolerancia)
-    Modern,    // Mandos nuevos (Hall Effect, alta resolución, menos tolerancia)
-}
-
-impl HardwareProfile {
-    pub fn detect(vid: u16, pid: u16) -> Self {
-        // IDs conocidos de mandos modernos de alta resolución (Hall Effect)
-        // Ejemplo: 8BitDo (2dc8), GameSir (2b2a), Flydigi (28e9)
-        match (vid, pid) {
-            (0x2dc8, _) | (0x2b2a, _) | (0x28e9, _) => HardwareProfile::Modern,
-            // Mandos Xbox oficiales (045e) modernos suelen ser muy precisos
-            (0x045e, 0x0b12) | (0x045e, 0x0b13) => HardwareProfile::Modern,
-            _ => HardwareProfile::Generic,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum CalibStep {
     Idle,

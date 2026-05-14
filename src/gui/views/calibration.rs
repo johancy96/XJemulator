@@ -23,6 +23,26 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(30.0);
         render_navigation_footer(app, ui);
     });
+
+    // Consola de Diagnóstico en tiempo real (DEBUG)
+    render_debug_console(app, ui);
+}
+
+fn render_debug_console(app: &App, ui: &mut egui::Ui) {
+    ui.add_space(20.0);
+    egui::Frame::default()
+        .fill(Theme::BG_DEEP)
+        .corner_radius(egui::CornerRadius::same(4))
+        .inner_margin(8.0)
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(egui::RichText::new("⌨ CONSOLA DE DIAGNÓSTICO").weak().size(10.0));
+            egui::ScrollArea::vertical().id_salt("debug_console").max_height(80.0).show(ui, |ui| {
+                for log in &app.calib_logs {
+                    ui.label(egui::RichText::new(log).monospace().size(10.0).color(Theme::INFO));
+                }
+            });
+        });
 }
 
 fn render_button_step(app: &mut App, ui: &mut egui::Ui, index: usize) {
@@ -46,20 +66,42 @@ fn render_button_step(app: &mut App, ui: &mut egui::Ui, index: usize) {
 }
 
 fn render_axis_step(app: &mut App, ui: &mut egui::Ui, index: usize) {
-    let (label, dir_label, xbox_axis) = {
-        let slot = &app.calib_axes[index];
-        (slot.label.clone(), slot.direction_label.clone(), slot.xbox_axis)
-    };
+    let axis = &app.calib_axes[index];
     
     ui.label(egui::RichText::new(crate::i18n::t(&app.config.lang, "calib_step_axes")).strong().color(Theme::INFO).size(14.0));
     ui.add_space(5.0);
     
-    // Dibujar el mando resaltando el eje actual
-    draw_xbox_controller(ui, None, Some(xbox_axis));
-    
-    ui.add_space(15.0);
-    ui.label(egui::RichText::new(label).size(28.0).strong().color(egui::Color32::WHITE));
-    ui.label(egui::RichText::new(dir_label).size(20.0).color(Theme::ACCENT));
+    ui.label(egui::RichText::new(&axis.label).size(28.0).strong().color(egui::Color32::WHITE));
+    ui.label(egui::RichText::new(&axis.direction_label).size(20.0).color(Theme::ACCENT));
+    ui.add_space(20.0);
+
+    // Barra de Progreso de Confirmación (Estilo Steam)
+    if app.waiting_for_release {
+        ui.vertical_centered(|ui| {
+            ui.add(egui::ProgressBar::new(1.0)
+                .text("¡SUELTA EL JOYSTICK!")
+                .animate(true)
+                .desired_width(260.0));
+            ui.label(egui::RichText::new("Esperando retorno al centro...").small().color(Theme::INFO));
+        });
+        ui.add_space(20.0);
+    } else if let Some(since) = app.detection_since {
+        let progress = (since.elapsed().as_secs_f32() / 0.3).min(1.0);
+        ui.vertical_centered(|ui| {
+            ui.add(egui::ProgressBar::new(progress)
+                .text(format!("{}%", (progress * 100.0) as i32))
+                .animate(true)
+                .desired_width(200.0));
+            ui.label(egui::RichText::new("Sostén para confirmar...").small().weak());
+        });
+        ui.add_space(20.0);
+    }
+
+    crate::gui::widgets::controller_view::draw_xbox_controller(
+        ui,
+        None,
+        Some(axis.xbox_axis),
+    );
     
     ui.add_space(20.0);
     app.handle_calibration_input();

@@ -2,7 +2,6 @@ use eframe::egui;
 use crate::gui::app::App;
 use crate::gui::theme::Theme;
 use crate::gui::widgets::device_card::draw_device_card;
-use crate::gui::types::CalibStep;
 
 pub fn render(app: &mut App, ui: &mut egui::Ui) {
     let w = ui.available_width();
@@ -70,11 +69,10 @@ fn render_device_list(app: &mut App, ui: &mut egui::Ui) {
         }
     }
 
-    ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
-        if ui.button(crate::i18n::t(&app.config.lang, "btn_refresh_pads")).clicked() {
-            app.gamepads = crate::scanner::scan_gamepads();
-        }
-    });
+    ui.add_space(10.0);
+    if ui.button(crate::i18n::t(&app.config.lang, "btn_refresh")).clicked() {
+        app.gamepads = crate::scanner::scan_gamepads();
+    }
 }
 
 fn render_profile_section(app: &mut App, ui: &mut egui::Ui) {
@@ -98,7 +96,7 @@ fn render_profile_section(app: &mut App, ui: &mut egui::Ui) {
                             to_load = Some(p.clone());
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("🗑").clicked() { to_delete = Some(p.clone()); }
+                            if ui.button(crate::gui::fonts::icons::TRASH).clicked() { to_delete = Some(p.clone()); }
                         });
                     });
                 });
@@ -108,46 +106,6 @@ fn render_profile_section(app: &mut App, ui: &mut egui::Ui) {
         if let Some(p) = to_load { app.load_profile_from_path(&p); }
         if let Some(p) = to_delete { app.delete_profile(&p); }
     });
-
-    ui.add_space(20.0);
-    ui.separator();
-    ui.add_space(10.0);
-    
-    render_raw_monitor(app, ui);
-}
-
-fn render_raw_monitor(app: &mut App, ui: &mut egui::Ui) {
-    ui.label(egui::RichText::new(crate::i18n::t(&app.config.lang, "lbl_raw_monitor")).strong());
-    ui.label(egui::RichText::new(crate::i18n::t(&app.config.lang, "lbl_raw_sub")).size(10.0).weak());
-    ui.add_space(4.0);
-
-    if let Ok(cap) = app.raw_capture.lock() {
-        if cap.axis_values.is_empty() && cap.pressed_keys.is_empty() {
-            ui.label(crate::i18n::t(&app.config.lang, "lbl_move_pad"));
-        } else {
-            egui::ScrollArea::vertical().id_salt("raw_monitor").max_height(150.0).show(ui, |ui| {
-                for &key in &cap.pressed_keys {
-                    let name = format!("{:?}", key);
-                    ui.colored_label(Theme::ACCENT, format!("[ {} ]", name));
-                }
-                
-                if !cap.axis_values.is_empty() {
-                    ui.add_space(5.0);
-                    ui.separator();
-                    ui.add_space(5.0);
-                    for (&axis, &val) in &cap.axis_values {
-                        if val.abs() > 100 { // Umbral de visualización
-                            let name = format!("{:?}", axis);
-                            ui.horizontal(|ui| {
-                                ui.label(format!("{}:", name));
-                                ui.colored_label(Theme::INFO, val.to_string());
-                            });
-                        }
-                    }
-                }
-            });
-        }
-    }
 }
 
 fn render_permissions_warning(app: &mut App, ui: &mut egui::Ui) {
@@ -158,7 +116,7 @@ fn render_permissions_warning(app: &mut App, ui: &mut egui::Ui) {
         .inner_margin(12.0)
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("⚠️").size(24.0));
+                ui.label(egui::RichText::new(crate::gui::fonts::icons::WARNING).size(24.0));
                 ui.vertical(|ui| {
                     ui.label(egui::RichText::new(crate::i18n::t(&app.config.lang, "udev_error_title")).strong());
                     ui.label(egui::RichText::new(crate::i18n::t(&app.config.lang, "udev_error_msg")).size(11.0));
@@ -192,8 +150,7 @@ fn render_main_content(app: &mut App, ui: &mut egui::Ui) {
                 ui.label(egui::RichText::new(crate::i18n::t(&app.config.lang, "lbl_emulating_active")).color(Theme::SUCCESS).strong());
             } else {
                 if ui.button(egui::RichText::new(crate::i18n::t(&app.config.lang, "btn_start_calib")).size(18.0)).clicked() {
-                    app.reset_calibration();
-                    app.calib_step = CalibStep::Buttons(0);
+                    app.start_assisted_mapping();
                 }
             }
         } else {

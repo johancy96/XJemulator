@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- Cuerpo del botón -->
+    <!-- Cuerpo del botón con degradado profundo -->
     <radialGradient id="button-body" cx="50%" cy="40%" r="50%" fx="50%" fy="30%">
       <stop offset="0%" style="stop-color:#16a316;stop-opacity:1" />
       <stop offset="100%" style="stop-color:#031a03;stop-opacity:1" />
@@ -28,24 +28,27 @@
   <!-- Cuerpo del botón -->
   <circle cx="50" cy="50" r="42" fill="url(#button-body)" stroke="#021402" stroke-width="1"/>
   
-  <!-- Símbolo XJ con Efecto de Hundimiento -->
+  <!-- Símbolo XJ Integrado (X como punto de la J) -->
   <g transform="translate(50, 48)">
-    <!-- Resplandor que emana del fondo -->
+    <!-- Resplandor neón -->
     <g filter="url(#clean-glow)" opacity="0.6">
-       <path d="M -20,-20 L 20,20" stroke="#aaffaa" stroke-width="6" stroke-linecap="round"/>
-       <path d="M 20,-20 L -20,20" stroke="#aaffaa" stroke-width="6" stroke-linecap="round"/>
-       <path d="M 0,-16 V 16 C 0,22 -6,24 -11,20" fill="none" stroke="#aaffaa" stroke-width="7" stroke-linecap="round"/>
+       <!-- La X (Punto) -->
+       <path d="M -8,-24 L 8,-12" stroke="#aaffaa" stroke-width="5" stroke-linecap="round"/>
+       <path d="M 8,-24 L -8,-12" stroke="#aaffaa" stroke-width="5" stroke-linecap="round"/>
+       <!-- La J (Cuerpo) -->
+       <path d="M 0,-4 V 22 C 0,30 -8,32 -14,26" fill="none" stroke="#aaffaa" stroke-width="7" stroke-linecap="round"/>
     </g>
 
-    <!-- Símbolo principal con efecto "Sunk" -->
+    <!-- Símbolo principal con efecto de bajorrelieve -->
     <g filter="url(#inner-shadow)">
-      <path d="M -20,-20 L 20,20" stroke="white" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
-      <path d="M 20,-20 L -20,20" stroke="white" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
-      <!-- J más corta y armónica -->
-      <path d="M 0,-16 V 16 C 0,22 -6,24 -11,20" fill="none" stroke="white" stroke-width="6" stroke-linecap="round"/>
+      <!-- La X (Punto) -->
+      <path d="M -8,-24 L 8,-12" stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+      <path d="M 8,-24 L -8,-12" stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+      <!-- La J (Cuerpo) -->
+      <path d="M 0,-4 V 22 C 0,30 -8,32 -14,26" fill="none" stroke="white" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
     </g>
   </g>
 
-  <!-- Brillo superior -->
+  <!-- Brillo superior para profundidad -->
   <ellipse cx="50" cy="28" rx="26" ry="12" fill="white" opacity="0.15"/>
 </svg>

@@ -111,7 +111,7 @@ fn render_profile_section(app: &mut App, ui: &mut egui::Ui) {
 fn render_permissions_warning(app: &mut App, ui: &mut egui::Ui) {
     egui::Frame::default()
         .fill(Theme::ERROR.gamma_multiply(0.1))
-        .stroke(egui::Stroke::new(1.0, Theme::ERROR))
+        .stroke(egui::Stroke::new(1.0_f32, Theme::ERROR))
         .corner_radius(egui::CornerRadius::same(8))
         .inner_margin(12.0)
         .show(ui, |ui| {

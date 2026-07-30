@@ -19,9 +19,9 @@ pub fn draw_device_card(
     };
 
     let stroke = if selected {
-        egui::Stroke::new(2.0, Theme::ACCENT)
+        egui::Stroke::new(2.0_f32, Theme::ACCENT)
     } else {
-        egui::Stroke::new(1.0, egui::Color32::from_gray(50))
+        egui::Stroke::new(1.0_f32, egui::Color32::from_gray(50))
     };
 
     egui::Frame::default()

@@ -50,20 +50,20 @@ pub fn draw_xbox_controller(
 
 fn draw_guide_button(painter: &egui::Painter, pos: Pos2, active: bool) {
     let color = if active { Color32::from_rgb(16, 124, 16) } else { Color32::from_gray(40) };
-    painter.circle(pos, 16.0, color, Stroke::new(2.0, Color32::WHITE));
+    painter.circle(pos, 16.0, color, Stroke::new(2.0_f32, Color32::WHITE));
     painter.text(pos, egui::Align2::CENTER_CENTER, "X", egui::FontId::proportional(14.0), Color32::WHITE);
 }
 
 fn draw_small_btn(painter: &egui::Painter, pos: Pos2, key: &str, highlight: Option<&str>) {
     let active = highlight == Some(key);
     let color = if active { Theme::ACCENT } else { Color32::from_gray(50) };
-    painter.circle(pos, 8.0, color, Stroke::new(1.0, Color32::WHITE));
+    painter.circle(pos, 8.0, color, Stroke::new(1.0_f32, Color32::WHITE));
 }
 
 fn draw_button(painter: &egui::Painter, pos: Pos2, key: &str, highlight: Option<&str>, color: Color32) {
     let active = highlight == Some(key);
     let fill = if active { color } else { Color32::from_gray(35) };
-    painter.circle(pos, 11.0, fill, Stroke::new(1.5, Color32::WHITE));
+    painter.circle(pos, 11.0, fill, Stroke::new(1.5_f32, Color32::WHITE));
 }
 
 fn draw_stick(painter: &egui::Painter, pos: Pos2, axis: &str, highlight_axis: Option<&str>, highlight_btn: bool) {
@@ -77,7 +77,7 @@ fn draw_stick(painter: &egui::Painter, pos: Pos2, axis: &str, highlight_axis: Op
     };
 
     let color = if active { Theme::ACCENT } else { Color32::from_gray(45) };
-    painter.circle(pos, 22.0, color, Stroke::new(2.0, Color32::WHITE));
+    painter.circle(pos, 22.0, color, Stroke::new(2.0_f32, Color32::WHITE));
 }
 
 fn draw_dpad(painter: &egui::Painter, pos: Pos2, axis: &str, highlight: Option<&str>) {
@@ -92,7 +92,7 @@ fn draw_bumper(painter: &egui::Painter, pos: Pos2, key: &str, highlight: Option<
     let color = if active { Theme::ACCENT } else { Color32::from_gray(35) };
     let rect = Rect::from_center_size(pos, egui::vec2(60.0, 16.0));
     painter.rect_filled(rect, 4.0, color);
-    painter.rect_stroke(rect, 4.0, Stroke::new(1.0, Color32::WHITE), egui::StrokeKind::Inside);
+    painter.rect_stroke(rect, 4.0, Stroke::new(1.0_f32, Color32::WHITE), egui::StrokeKind::Inside);
 }
 
 fn draw_trigger(painter: &egui::Painter, pos: Pos2, axis: &str, highlight: Option<&str>) {
@@ -100,5 +100,5 @@ fn draw_trigger(painter: &egui::Painter, pos: Pos2, axis: &str, highlight: Optio
     let color = if active { Theme::ACCENT } else { Color32::from_gray(30) };
     let rect = Rect::from_center_size(pos, egui::vec2(50.0, 25.0));
     painter.rect_filled(rect, 6.0, color);
-    painter.rect_stroke(rect, 6.0, Stroke::new(1.0, Color32::WHITE), egui::StrokeKind::Inside);
+    painter.rect_stroke(rect, 6.0, Stroke::new(1.0_f32, Color32::WHITE), egui::StrokeKind::Inside);
 }

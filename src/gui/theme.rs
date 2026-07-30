@@ -30,11 +30,11 @@ impl Theme {
         visuals.panel_fill = Self::BG_DEEP;
         visuals.window_fill = Self::BG_CARD;
         visuals.widgets.noninteractive.bg_fill = Self::BG_CARD;
-        visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, Self::TEXT_SECONDARY);
+        visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, Self::TEXT_SECONDARY);
         
         // Personalización de widgets activos
         visuals.selection.bg_fill = Self::ACCENT;
-        visuals.selection.stroke = Stroke::new(1.0, Color32::WHITE);
+        visuals.selection.stroke = Stroke::new(1.0_f32, Color32::WHITE);
         
         // Estilo de botones
         visuals.widgets.inactive.bg_fill = Self::BG_SIDEBAR;

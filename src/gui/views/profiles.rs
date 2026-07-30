@@ -17,7 +17,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
                 .fill(Theme::BG_CARD)
                 .corner_radius(egui::CornerRadius::same(12))
                 .inner_margin(12.0)
-                .stroke(if active { egui::Stroke::new(1.0, Theme::ACCENT) } else { egui::Stroke::NONE })
+                .stroke(if active { egui::Stroke::new(1.0_f32, Theme::ACCENT) } else { egui::Stroke::NONE })
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {

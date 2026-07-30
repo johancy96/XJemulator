@@ -512,14 +512,15 @@ impl eframe::App for App {
 
         Theme::apply(ctx);
 
-        // GPU Smart Sleep: 60 FPS si hay actividad, 1 FPS en idle
+        // GPU Smart Sleep: 60 FPS si hay actividad
         let is_focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
         
         if is_focused && (self.calib_step != CalibStep::Idle || !self.emulators.is_empty()) {
             ctx.request_repaint_after(std::time::Duration::from_millis(16));
-        } else {
-            ctx.request_repaint_after(std::time::Duration::from_millis(1000));
         }
+        // Cuando no tiene el foco (is_focused == false) o está inactiva,
+        // confiamos en el modo reactivo nativo de eframe. No forzamos repaints
+        // para evitar que eglSwapBuffers bloquee el hilo principal en Linux.
 
         egui::TopBottomPanel::top("header").frame(egui::Frame::NONE.fill(Theme::BG_DEEP).inner_margin(10.0)).show(ctx, |ui| {
             ui.horizontal(|ui| {

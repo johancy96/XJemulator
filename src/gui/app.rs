@@ -34,6 +34,7 @@ pub struct App {
     pub profile_name: String,
 
     pub axis_resting: HashMap<evdevil::event::Abs, i32>,
+    pub last_axis_snapshot: HashMap<evdevil::event::Abs, i32>,
     pub axes_used: HashSet<evdevil::event::Abs>,
     pub cooldown_until: Option<std::time::Instant>,
 
@@ -51,7 +52,12 @@ pub struct App {
     pub axis_max: HashMap<evdevil::event::Abs, i32>,
     pub current_detect: Option<(evdevil::event::Abs, bool)>,
     pub detection_since: Option<std::time::Instant>,
+    pub peak_delta: i32,
+    pub peak_since: Option<std::time::Instant>,
+    pub current_travel_ratio: f32,
+    pub digital_btn_candidate: Option<(evdevil::event::Key, std::time::Instant)>,
     pub waiting_for_release: bool,
+    pub needs_user_release_notice: bool,
     pub stability_timer: Option<std::time::Instant>,
 }
 
@@ -78,6 +84,7 @@ impl App {
             calib_axes: default_axis_slots(&config.lang),
             profile_name: "nuevo_perfil".into(),
             axis_resting: HashMap::new(),
+            last_axis_snapshot: HashMap::new(),
             axes_used: HashSet::new(),
             cooldown_until: None,
             editing_profile: None,
@@ -93,7 +100,12 @@ impl App {
             axis_max: HashMap::new(),
             current_detect: None,
             detection_since: None,
+            peak_delta: 0,
+            peak_since: None,
+            current_travel_ratio: 0.0,
+            digital_btn_candidate: None,
             waiting_for_release: false,
+            needs_user_release_notice: false,
             stability_timer: None,
         };
 
@@ -181,7 +193,6 @@ impl App {
             return;
         }
 
-        // Liberar de forma síncrona el lector antes de abrir el emulador (evita conflicto EVIOCGRAB)
         self.stop_reader();
 
         match VirtualXbox360::new() {
@@ -264,13 +275,19 @@ impl App {
         self.calib_axes = default_axis_slots(&self.config.lang);
         self.axes_used.clear();
         self.axis_resting.clear();
+        self.last_axis_snapshot.clear();
         self.axis_min.clear();
         self.axis_max.clear();
         self.calib_logs.clear();
         self.waiting_for_release = false;
+        self.needs_user_release_notice = false;
         self.stability_timer = None;
         self.current_detect = None;
         self.detection_since = None;
+        self.peak_delta = 0;
+        self.peak_since = None;
+        self.current_travel_ratio = 0.0;
+        self.digital_btn_candidate = None;
         self.stop_reader();
 
         if let Ok(mut cap) = self.raw_capture.lock() {
@@ -282,12 +299,27 @@ impl App {
 
     /// Gestor de transiciones determinista
     fn advance_to_step(&mut self, next: CalibStep) {
+        let entering_axes_from_buttons =
+            matches!(self.calib_step, CalibStep::Buttons(_)) && matches!(next, CalibStep::Axes(0));
+
         self.calib_step = next;
         self.last_step_time = std::time::Instant::now();
-        self.waiting_for_release = true; // Forzar centro por seguridad en cada cambio
+        self.waiting_for_release = matches!(self.calib_step, CalibStep::Axes(_));
+        self.needs_user_release_notice = false;
         self.stability_timer = None;
         self.current_detect = None;
         self.detection_since = None;
+        self.peak_delta = 0;
+        self.peak_since = None;
+        self.current_travel_ratio = 0.0;
+        self.digital_btn_candidate = None;
+
+        // Si acabamos de terminar los botones (ej. tras pulsar R3), limpiamos axis_resting
+        // para que se mida únicamente cuando el usuario haya soltado R3 y el stick esté quieto.
+        if entering_axes_from_buttons {
+            self.axis_resting.clear();
+            self.last_axis_snapshot.clear();
+        }
 
         if let Ok(mut cap) = self.raw_capture.lock() {
             cap.key_queue.clear();
@@ -313,6 +345,9 @@ impl App {
 
         match self.calib_step {
             CalibStep::Buttons(idx) => {
+                // Asegurar que la barra de recorrido de ejes esté siempre en 0 durante los botones
+                self.current_travel_ratio = 0.0;
+
                 let key = if let Ok(mut cap) = self.raw_capture.lock() {
                     cap.key_queue.pop_front()
                 } else {
@@ -341,70 +376,128 @@ impl App {
                 let ranges_ref = ranges.unwrap_or(&empty_ranges);
                 let current_target = self.calib_axes[idx].xbox_axis;
 
-                let detected = {
+                let mut expected_same_axis: Option<(evdevil::event::Abs, bool)> = None;
+                let mut exclude = HashSet::new();
+                for (prev_idx, prev) in self.calib_axes.iter().enumerate() {
+                    if prev_idx >= idx {
+                        break;
+                    }
+                    if let (Some(src), tgt) = (&prev.source, prev.xbox_axis) {
+                        if let Ok(abs_code) = crate::mapper::parse_abs(src) {
+                            if tgt == current_target {
+                                let first_was_positive = prev.positive_expected != prev.invert;
+                                expected_same_axis = Some((abs_code, !first_was_positive));
+                            } else {
+                                exclude.insert(abs_code);
+                            }
+                        }
+                    }
+                }
+
+                let used_buttons: HashSet<String> = self
+                    .calib_btns
+                    .iter()
+                    .filter_map(|b| b.source.clone())
+                    .collect();
+
+                let snapshot = {
                     let lock = self.raw_capture.lock();
                     let Ok(cap) = lock else { return };
 
                     if self.waiting_for_release {
-                        if crate::gui::backend::is_all_centered(&cap.axis_values, ranges_ref) {
+                        let all_buttons_released = cap.pressed_keys.is_empty();
+                        let centered = crate::gui::backend::is_all_centered(
+                            &cap.axis_values,
+                            ranges_ref,
+                            &self.axis_resting,
+                        );
+
+                        // Verificar también que los ejes no estén en pleno movimiento de rebote (ej. al soltar R3)
+                        let mutaxes_still = true;
+                        let mut is_still = true;
+                        for (&axis_code, &val) in &cap.axis_values {
+                            if let Some(&prev_val) = self.last_axis_snapshot.get(&axis_code) {
+                                let (min, max) =
+                                    ranges_ref.get(&axis_code).copied().unwrap_or((-32768, 32767));
+                                let span = (max - min).abs().max(1) as f32;
+                                if ((val - prev_val).abs() as f32) > span * 0.03 {
+                                    is_still = false;
+                                    break;
+                                }
+                            }
+                        }
+                        let _ = mutaxes_still;
+                        self.last_axis_snapshot = cap.axis_values.clone();
+
+                        if all_buttons_released && centered && is_still {
+                            self.needs_user_release_notice = false;
                             let now = std::time::Instant::now();
                             let start = self.stability_timer.get_or_insert(now);
                             if start.elapsed() >= std::time::Duration::from_millis(250) {
-                                Some((None, cap.axis_values.clone()))
+                                Some((None, None, cap.axis_values.clone()))
                             } else {
                                 None
                             }
                         } else {
+                            self.needs_user_release_notice = !(all_buttons_released && centered);
                             self.stability_timer = None;
                             None
                         }
                     } else {
-                        let mut exclude = HashSet::new();
-                        for prev in &self.calib_axes {
-                            if let (Some(src), tgt) = (&prev.source, prev.xbox_axis) {
-                                if tgt != current_target {
-                                    if let Ok(abs_code) = crate::mapper::parse_abs(src) {
-                                        exclude.insert(abs_code);
-                                    }
-                                }
-                            }
-                        }
-
-                        let det = crate::gui::backend::detect_axis_movement(
+                        let mov = crate::gui::backend::detect_axis_movement(
                             &cap.axis_values,
                             &self.axis_resting,
                             &exclude,
                             ranges_ref,
+                            expected_same_axis,
                         );
 
-                        det.map(|d| (Some(d), cap.axis_values.clone()))
+                        let pressed_btn = if mov.is_none() {
+                            cap.pressed_keys
+                                .iter()
+                                .find(|k| !used_buttons.contains(&format!("{:?}", k)))
+                                .copied()
+                        } else {
+                            None
+                        };
+
+                        Some((mov, pressed_btn, cap.axis_values.clone()))
                     }
                 };
 
-                if let Some((det, values)) = detected {
-                    if let Some(d) = det {
-                        let (axis, pos) = d;
-                        let is_hat = format!("{:?}", axis).contains("HAT");
-                        let hold_req = if is_hat { 40 } else { 250 };
+                let Some((mov_opt, pressed_btn, values)) = snapshot else {
+                    return;
+                };
 
+                if self.waiting_for_release {
+                    for (k, v) in values {
+                        self.axis_resting.entry(k).or_insert(v);
+                    }
+                    self.waiting_for_release = false;
+                    self.needs_user_release_notice = false;
+                    self.stability_timer = None;
+                    self.current_travel_ratio = 0.0;
+                    self.calib_logs.push(
+                        crate::i18n::t(&self.config.lang, "lbl_axis_synced").to_string(),
+                    );
+                    return;
+                }
+
+                if let Some(mov) = mov_opt {
+                    self.digital_btn_candidate = None;
+                    let d = (mov.axis, mov.positive);
+
+                    if mov.is_digital {
+                        self.current_travel_ratio = 1.0;
                         if self.current_detect == Some(d) {
                             if let Some(since) = self.detection_since {
-                                if !is_hat {
-                                    let rest = self.axis_resting.get(&axis).copied().unwrap_or(0);
-                                    let cur_val = values.get(&axis).copied().unwrap_or(rest);
-                                    let delta = (cur_val - rest).abs();
-                                    let old_max = self.calib_axes[idx].max_val.unwrap_or(0);
-                                    if delta > old_max {
-                                        self.calib_axes[idx].max_val = Some(delta);
-                                    }
-                                }
-
-                                if since.elapsed().as_millis() >= hold_req as u128 {
-                                    let axis_name = format!("{:?}", axis);
+                                if since.elapsed().as_millis() >= 80 {
+                                    let axis_name = format!("{:?}", mov.axis);
                                     self.calib_axes[idx].source = Some(axis_name);
                                     self.calib_axes[idx].invert =
-                                        self.calib_axes[idx].positive_expected != pos;
-                                    self.axes_used.insert(axis);
+                                        self.calib_axes[idx].positive_expected != mov.positive;
+                                    self.calib_axes[idx].max_val = Some(mov.delta.max(1));
+                                    self.axes_used.insert(mov.axis);
                                     self.advance_to_step(if idx + 1 >= self.calib_axes.len() {
                                         CalibStep::Review
                                     } else {
@@ -419,18 +512,82 @@ impl App {
                             self.detection_since = Some(std::time::Instant::now());
                         }
                     } else {
-                        for (k, v) in values {
-                            self.axis_resting.insert(k, v);
+                        let now = std::time::Instant::now();
+                        if self.current_detect != Some(d) {
+                            self.current_detect = Some(d);
+                            self.detection_since = Some(now);
+                            self.peak_delta = mov.delta;
+                            self.peak_since = Some(now);
+                        } else {
+                            let step_margin = (self.peak_delta / 45).max(2);
+                            if mov.delta > self.peak_delta + step_margin {
+                                self.peak_delta = mov.delta;
+                                self.peak_since = Some(now);
+                            } else if mov.delta > self.peak_delta {
+                                self.peak_delta = mov.delta;
+                            }
                         }
-                        self.waiting_for_release = false;
-                        self.stability_timer = None;
-                        self.calib_logs.push(
-                            crate::i18n::t(&self.config.lang, "lbl_axis_synced").to_string(),
-                        );
+
+                        self.calib_axes[idx].max_val = Some(self.peak_delta);
+                        self.current_travel_ratio = mov.travel_ratio;
+
+                        let held_at_peak_ms = self
+                            .peak_since
+                            .map(|t| t.elapsed().as_millis())
+                            .unwrap_or(0);
+                        let near_peak = (mov.delta as f32) >= (self.peak_delta as f32 * 0.90);
+
+                        let reached_full_stop = near_peak
+                            && ((mov.travel_ratio >= 0.85 && held_at_peak_ms >= 250)
+                                || (mov.travel_ratio >= 0.55 && held_at_peak_ms >= 450));
+
+                        if reached_full_stop {
+                            let axis_name = format!("{:?}", mov.axis);
+                            self.calib_axes[idx].source = Some(axis_name);
+                            self.calib_axes[idx].invert =
+                                self.calib_axes[idx].positive_expected != mov.positive;
+                            self.calib_axes[idx].max_val = Some(self.peak_delta);
+                            self.axes_used.insert(mov.axis);
+                            self.advance_to_step(if idx + 1 >= self.calib_axes.len() {
+                                CalibStep::Review
+                            } else {
+                                CalibStep::Axes(idx + 1)
+                            });
+                        }
+                    }
+                } else if let Some(btn_key) = pressed_btn {
+                    let now = std::time::Instant::now();
+                    if let Some((cand_key, since)) = self.digital_btn_candidate {
+                        if cand_key == btn_key {
+                            let elapsed = since.elapsed().as_millis();
+                            self.current_travel_ratio = (elapsed as f32 / 250.0).min(1.0);
+                            if elapsed >= 250 {
+                                let key_name = format!("{:?}", btn_key);
+                                self.calib_axes[idx].source = Some(key_name);
+                                self.calib_axes[idx].invert = false;
+                                self.calib_axes[idx].max_val = None;
+                                self.start_btn_cooldown();
+                                self.advance_to_step(if idx + 1 >= self.calib_axes.len() {
+                                    CalibStep::Review
+                                } else {
+                                    CalibStep::Axes(idx + 1)
+                                });
+                            }
+                        } else {
+                            self.digital_btn_candidate = Some((btn_key, now));
+                            self.current_travel_ratio = 0.2;
+                        }
+                    } else {
+                        self.digital_btn_candidate = Some((btn_key, now));
+                        self.current_travel_ratio = 0.2;
                     }
                 } else {
                     self.current_detect = None;
                     self.detection_since = None;
+                    self.peak_delta = 0;
+                    self.peak_since = None;
+                    self.current_travel_ratio = 0.0;
+                    self.digital_btn_candidate = None;
                 }
             }
             _ => {}
@@ -453,7 +610,6 @@ impl App {
                 self.calib_btns[idx].source = None;
                 let next_idx = idx + 1;
                 if next_idx >= self.calib_btns.len() {
-                    self.capture_resting();
                     self.advance_to_step(CalibStep::Axes(0));
                 } else {
                     self.advance_to_step(CalibStep::Buttons(next_idx));
@@ -474,16 +630,15 @@ impl App {
         self.start_btn_cooldown();
     }
 
-    fn capture_resting(&mut self) {
-        if let Ok(cap) = self.raw_capture.lock() {
-            self.axis_resting = cap.axis_values.clone();
-        }
-    }
-
     pub fn prev_calibration_step(&mut self) {
         self.current_detect = None;
         self.detection_since = None;
+        self.peak_delta = 0;
+        self.peak_since = None;
+        self.current_travel_ratio = 0.0;
+        self.digital_btn_candidate = None;
         self.waiting_for_release = false;
+        self.needs_user_release_notice = false;
 
         match self.calib_step {
             CalibStep::Buttons(idx) if idx > 0 => {
@@ -501,6 +656,7 @@ impl App {
                     self.calib_step = CalibStep::Axes(idx - 1);
                     self.calib_axes[idx - 1].source = None;
                     self.calib_axes[idx - 1].max_val = None;
+                    self.waiting_for_release = true;
 
                     self.axes_used.clear();
                     for i in 0..(idx - 1) {
@@ -515,6 +671,7 @@ impl App {
             CalibStep::Review => {
                 let last_axis = self.calib_axes.len() - 1;
                 self.calib_step = CalibStep::Axes(last_axis);
+                self.waiting_for_release = true;
                 if let Some(a) = self.calib_axes.last_mut() {
                     a.source = None;
                 }

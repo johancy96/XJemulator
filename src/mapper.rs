@@ -21,6 +21,15 @@ pub struct ButtonMapping {
     pub target: String,
 }
 
+/// Mapping from a digital source button (0/1) to an Xbox axis
+/// Allows older controllers with digital triggers or button D-Pads to drive Xbox axes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ButtonAxisMapping {
+    pub source: String,
+    pub target: String,
+    pub active_value: i32,
+}
+
 /// A complete mapping profile for a controller
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MappingProfile {
@@ -30,6 +39,8 @@ pub struct MappingProfile {
     pub product_id: Option<u16>,
     pub axes: Vec<AxisMapping>,
     pub buttons: Vec<ButtonMapping>,
+    #[serde(default)]
+    pub button_axes: Vec<ButtonAxisMapping>,
 }
 
 /// Parsed and ready-to-use mapping table
@@ -37,6 +48,8 @@ pub struct MappingProfile {
 pub struct Mapper {
     pub axis_map: HashMap<Abs, (Abs, bool, i32, f32, i32)>,
     pub button_map: HashMap<Key, Key>,
+    /// Digital button -> list of (target_axis, active_value)
+    pub button_axis_map: HashMap<Key, (Abs, i32)>,
 }
 
 impl Mapper {
@@ -44,11 +57,12 @@ impl Mapper {
     pub fn from_profile(profile: &MappingProfile) -> Result<Self, String> {
         let mut axis_map = HashMap::new();
         let mut button_map = HashMap::new();
+        let mut button_axis_map = HashMap::new();
 
         for am in &profile.axes {
             let source = parse_abs(&am.source)?;
             let target = parse_abs(&am.target)?;
-            let deadzone = if am.deadzone > 0 { am.deadzone } else { 0 };
+            let deadzone = am.deadzone.max(0);
             let scale = if am.scale > 0.0 { am.scale } else { 1.0 };
             axis_map.insert(source, (target, am.invert, deadzone, scale, am.center));
         }
@@ -59,21 +73,28 @@ impl Mapper {
             button_map.insert(source, target);
         }
 
+        for bam in &profile.button_axes {
+            let source = parse_key(&bam.source)?;
+            let target = parse_abs(&bam.target)?;
+            button_axis_map.insert(source, (target, bam.active_value));
+        }
+
         Ok(Self {
             axis_map,
             button_map,
+            button_axis_map,
         })
     }
 
     /// Create a default 1:1 identity mapping
     pub fn identity() -> Self {
         let axis_map = HashMap::from([
-            (Abs::X, (Abs::X, false, 8000, 1.0, 0)),
-            (Abs::Y, (Abs::Y, false, 8000, 1.0, 0)),
-            (Abs::Z, (Abs::Z, false, 0, 1.0, 0)),
-            (Abs::RX, (Abs::RX, false, 8000, 1.0, 0)),
-            (Abs::RY, (Abs::RY, false, 8000, 1.0, 0)),
-            (Abs::RZ, (Abs::RZ, false, 0, 1.0, 0)),
+            (Abs::X, (Abs::X, false, 3000, 1.0, 0)),
+            (Abs::Y, (Abs::Y, false, 3000, 1.0, 0)),
+            (Abs::Z, (Abs::Z, false, 4, 1.0, 0)),
+            (Abs::RX, (Abs::RX, false, 3000, 1.0, 0)),
+            (Abs::RY, (Abs::RY, false, 3000, 1.0, 0)),
+            (Abs::RZ, (Abs::RZ, false, 4, 1.0, 0)),
             (Abs::HAT0X, (Abs::HAT0X, false, 0, 1.0, 0)),
             (Abs::HAT0Y, (Abs::HAT0Y, false, 0, 1.0, 0)),
         ]);
@@ -99,42 +120,69 @@ impl Mapper {
         Self {
             axis_map,
             button_map,
+            button_axis_map: HashMap::new(),
         }
     }
 
-    /// Map a source axis value to a target axis value
+    /// Map a source axis value to a target Xbox 360 axis value.
+    ///
+    /// Uses a **Continuous Scaled Deadzone** (Re-escalado Progresivo) so that
+    /// Hall-effect/magnetic sticks and triggers transition smoothly from 0% to 100%
+    /// velocity without any sudden jump at the deadzone boundary.
     pub fn map_axis(&self, source: Abs, value: i32) -> Option<(Abs, i32)> {
         self.axis_map
             .get(&source)
             .map(|(target, invert, deadzone, scale, center)| {
-                // 1. Remove center offset -> v is now a pure delta
-                let mut v = value - center;
+                // 1. Delta continuo desde el punto de reposo calibrado
+                let mut delta = (value - *center) as f32;
 
-                // 2. Scale up to Xbox standard range
-                if *scale != 1.0 {
-                    v = (v as f32 * scale) as i32;
-                }
-
-                // 3. Apply deadzone AFTER scaling (so standard 8000 works for any controller)
-                if v.abs() < *deadzone {
-                    v = 0;
-                }
-
-                // 4. Invert if needed
+                // 2. Invertir polaridad antes del clamp si el eje físico va en sentido opuesto
                 if *invert {
-                    v = -v;
+                    delta = -delta;
                 }
 
-                // Emulated Xbox target clamp bounds
-                if target == &Abs::Z || target == &Abs::RZ {
-                    v = v.clamp(0, 255);
+                // 3. Escalar al rango objetivo de Xbox
+                let scaled = delta * *scale;
+                let dz = (*deadzone).max(0) as f32;
+
+                // 4. Re-escalado continuo por tipo de eje (Sticks vs Gatillos vs D-Pad)
+                let out = if target == &Abs::Z || target == &Abs::RZ {
+                    // Gatillos analógicos (0..255): progresión continua desde la zona muerta hasta 255
+                    if scaled <= dz {
+                        0
+                    } else {
+                        let effective_max = (255.0 - dz).max(1.0);
+                        let norm = ((scaled - dz) / effective_max).clamp(0.0, 1.0);
+                        (norm * 255.0).round() as i32
+                    }
                 } else if target == &Abs::HAT0X || target == &Abs::HAT0Y {
-                    v = v.clamp(-1, 1);
+                    // Cruceta (D-Pad): -1, 0, 1
+                    if scaled.abs() < 0.5 {
+                        0
+                    } else if scaled > 0.0 {
+                        1
+                    } else {
+                        -1
+                    }
                 } else {
-                    v = v.clamp(-32768, 32767);
-                }
+                    // Joysticks analógicos/magnéticos (-32768..32767):
+                    // Re-escalado lineal continuo desde [dz .. 32767] -> [1 .. 32767]
+                    let abs_v = scaled.abs();
+                    if abs_v <= dz {
+                        0
+                    } else {
+                        let effective_max = (32767.0 - dz).max(1.0);
+                        let norm = ((abs_v - dz) / effective_max).clamp(0.0, 1.0);
+                        let mag = (norm * 32767.0).round() as i32;
+                        if scaled < 0.0 {
+                            (-mag).clamp(-32768, 32767)
+                        } else {
+                            mag.clamp(-32768, 32767)
+                        }
+                    }
+                };
 
-                (*target, v)
+                (*target, out)
             })
     }
 
@@ -142,12 +190,20 @@ impl Mapper {
     pub fn map_button(&self, source: Key) -> Option<Key> {
         self.button_map.get(&source).copied()
     }
+
+    /// Map a digital button (on older controllers) to an emulated Xbox axis value
+    pub fn map_button_to_axis(&self, source: Key, pressed: bool) -> Option<(Abs, i32)> {
+        self.button_axis_map
+            .get(&source)
+            .map(|&(target_abs, active_val)| {
+                let val = if pressed { active_val } else { 0 };
+                (target_abs, val)
+            })
+    }
 }
 
 /// Parse an axis name string to an Abs value
 pub(crate) fn parse_abs(s: &str) -> Result<Abs, String> {
-    // evdevil uses serde with names like "X", "Y", "ABS_X" etc.
-    // We handle both formats
     let normalized = s.strip_prefix("ABS_").unwrap_or(s);
     match normalized {
         "X" => Ok(Abs::X),
@@ -160,6 +216,10 @@ pub(crate) fn parse_abs(s: &str) -> Result<Abs, String> {
         "HAT0Y" => Ok(Abs::HAT0Y),
         "HAT1X" => Ok(Abs::HAT1X),
         "HAT1Y" => Ok(Abs::HAT1Y),
+        "HAT2X" => Ok(Abs::HAT2X),
+        "HAT2Y" => Ok(Abs::HAT2Y),
+        "HAT3X" => Ok(Abs::HAT3X),
+        "HAT3Y" => Ok(Abs::HAT3Y),
         "THROTTLE" => Ok(Abs::THROTTLE),
         "RUDDER" => Ok(Abs::RUDDER),
         "WHEEL" => Ok(Abs::WHEEL),
@@ -199,9 +259,20 @@ pub(crate) fn parse_key(s: &str) -> Result<Key, String> {
         "BTN_THUMB" => Ok(Key::BTN_THUMB),
         "BTN_THUMB2" => Ok(Key::BTN_THUMB2),
         "BTN_TOP" => Ok(Key::BTN_TOP),
+        "BTN_TOP2" => Ok(Key::BTN_TOP2),
         "BTN_PINKIE" => Ok(Key::BTN_PINKIE),
         "BTN_BASE" => Ok(Key::BTN_BASE),
+        "BTN_BASE2" => Ok(Key::BTN_BASE2),
+        "BTN_BASE3" => Ok(Key::BTN_BASE3),
+        "BTN_BASE4" => Ok(Key::BTN_BASE4),
+        "BTN_BASE5" => Ok(Key::BTN_BASE5),
+        "BTN_BASE6" => Ok(Key::BTN_BASE6),
+        "BTN_DEAD" => Ok(Key::BTN_DEAD),
         "BTN_JOYSTICK" => Ok(Key::BTN_JOYSTICK),
+        "BTN_DPAD_UP" => Ok(Key::BTN_DPAD_UP),
+        "BTN_DPAD_DOWN" => Ok(Key::BTN_DPAD_DOWN),
+        "BTN_DPAD_LEFT" => Ok(Key::BTN_DPAD_LEFT),
+        "BTN_DPAD_RIGHT" => Ok(Key::BTN_DPAD_RIGHT),
         _ => Err(format!("Boton desconocido: {}", s)),
     }
 }

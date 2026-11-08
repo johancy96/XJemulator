@@ -1,18 +1,27 @@
 use super::types::{AxisSlot, BtnSlot, RawCapture};
-use crate::mapper::{parse_abs, Mapper};
+use crate::mapper::{parse_abs, parse_key, Mapper};
 use crate::virtual_device::VirtualXbox360;
 use eframe::egui;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-// --- Estándares de Ingeniería de Entrada (Baja Latencia 500Hz) ---
-const HW_DEADZONE_PERCENT: f32 = 0.20;  // 20% de zona muerta física (Hardware Gate)
-const AXIS_CONFIRM_PERCENT: f32 = 0.35;  // 35% de recorrido para confirmar intención
-const EMU_POLLING_MS: u64 = 2;           // Latencia de emulación (500Hz)
-const READER_POLLING_MS: u64 = 2;        // Latencia de captura/calibración (500Hz)
-const BACKOFF_MS: u64 = 80;             // Retraso entre reintentos de grab
-const MAX_GRAB_ATTEMPTS: usize = 6;      // Intentos de secuestro exclusivos
+// --- Estándares de Ingeniería de Entrada (Baja Latencia 500Hz + Sensores Hall/Continuos) ---
+const HW_DEADZONE_PERCENT: f32 = 0.15;   // 15% de compuerta física para retorno al reposo
+const AXIS_START_TRACK_RATIO: f32 = 0.18; // 18% de recorrido para iniciar lectura continua
+const EMU_POLLING_MS: u64 = 2;            // Latencia de emulación (500Hz)
+const READER_POLLING_MS: u64 = 2;         // Latencia de captura/calibración (500Hz)
+const BACKOFF_MS: u64 = 80;              // Retraso entre reintentos de grab
+const MAX_GRAB_ATTEMPTS: usize = 6;       // Intentos de secuestro exclusivos
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct AxisMovement {
+    pub axis: evdevil::event::Abs,
+    pub positive: bool,
+    pub delta: i32,
+    pub travel_ratio: f32,
+    pub is_digital: bool,
+}
 
 /// Registra errores técnicos en el directorio de telemetría sin molestar al usuario.
 fn log_telemetry(msg: &str) {
@@ -24,13 +33,14 @@ fn log_telemetry(msg: &str) {
     }
 }
 
-/// Determina si un valor está en un estado de "Reposo de Hardware".
-/// Un eje es neutral si está cerca de su Mínimo, su Máximo o su Centro Matemático.
-/// Esto cubre Joysticks (Centro) y Gatillos (Mín/Máx).
+/// Determina si un eje ha regresado a su estado de reposo.
+/// Si ya conocemos el punto de reposo exacto (`known_rest`), verifica proximidad a ese punto
+/// (evitando falsos centros en `0` cuando un gatillo `-32768..32767` va a mitad de recorrido).
 pub(crate) fn is_hardware_centered(
     code: evdevil::event::Abs,
     val: i32,
     ranges: &HashMap<evdevil::event::Abs, (i32, i32)>,
+    known_rest: Option<i32>,
 ) -> bool {
     if let Some(&(min, max)) = ranges.get(&code) {
         let full_range = (max - min).abs() as f32;
@@ -38,65 +48,121 @@ pub(crate) fn is_hardware_centered(
             return true;
         }
 
+        if full_range <= 2.0 {
+            let rest = known_rest.unwrap_or(0);
+            return val == rest;
+        }
+
+        if let Some(rest) = known_rest {
+            let max_travel = (max - rest).abs().max((rest - min).abs()).max(1) as f32;
+            return ((val - rest).abs() as f32) <= max_travel * HW_DEADZONE_PERCENT;
+        }
+
         let deadzone = full_range * HW_DEADZONE_PERCENT;
         let center = (min + max) / 2;
 
-        // Comprobación Tri-Modal:
-        let near_min = ((val - min).abs() as f32) < deadzone;
-        let near_max = ((val - max).abs() as f32) < deadzone;
-        let near_center = ((val - center).abs() as f32) < deadzone;
+        // Comprobación Tri-Modal inicial antes de conocer `resting`
+        let near_min = ((val - min).abs() as f32) <= deadzone;
+        let near_max = ((val - max).abs() as f32) <= deadzone;
+        let near_center = ((val - center).abs() as f32) <= deadzone;
 
         return near_min || near_max || near_center;
     }
-    // Fallback estándar
     val.abs() < 2000 || (val - 128).abs() < 20 || (val - 255).abs() < 20
 }
 
+/// Detecta movimiento en ejes tanto continuos (Hall Effect / analógicos) como discretos (HAT / 0-1),
+/// calculando la excursión real respecto al límite físico en la dirección del movimiento.
 pub(crate) fn detect_axis_movement(
     axis_values: &HashMap<evdevil::event::Abs, i32>,
     resting: &HashMap<evdevil::event::Abs, i32>,
     exclude_axes: &HashSet<evdevil::event::Abs>,
     ranges: &HashMap<evdevil::event::Abs, (i32, i32)>,
-) -> Option<(evdevil::event::Abs, bool)> {
-    let mut best_axis = None;
-    let mut max_p = 0.0f32;
+    expected_same_axis: Option<(evdevil::event::Abs, bool)>,
+) -> Option<AxisMovement> {
+    let mut best: Option<AxisMovement> = None;
 
     for (&code, &cur) in axis_values {
         if exclude_axes.contains(&code) {
             continue;
         }
 
-        // Usar resting capturado o centro de hardware
-        let rest = resting
-            .get(&code)
-            .copied()
-            .unwrap_or_else(|| ranges.get(&code).map(|&(min, max)| (min + max) / 2).unwrap_or(0));
+        if let Some((req_axis, req_pos)) = expected_same_axis {
+            if code != req_axis {
+                continue;
+            }
+            let rest = resting
+                .get(&code)
+                .copied()
+                .unwrap_or_else(|| ranges.get(&code).map(|&(min, max)| (min + max) / 2).unwrap_or(0));
+            if cur == rest || (cur > rest) != req_pos {
+                continue;
+            }
+        }
 
-        let delta = (cur - rest).abs() as f32;
         let (min, max) = ranges.get(&code).copied().unwrap_or((-32768, 32767));
-        let full_range = (max - min).abs() as f32;
-        if full_range == 0.0 {
+        let full_range = (max - min).abs();
+        if full_range == 0 {
             continue;
         }
 
-        let percent = delta / full_range;
-        let is_hat = format!("{:?}", code).contains("HAT");
-        let threshold = if is_hat { 0.45 } else { AXIS_CONFIRM_PERCENT };
+        let rest = resting
+            .get(&code)
+            .copied()
+            .unwrap_or_else(|| (min + max) / 2);
 
-        if percent > threshold && percent > max_p {
-            max_p = percent;
-            best_axis = Some((code, cur > rest));
+        let signed_delta = cur - rest;
+        let delta = signed_delta.abs();
+        if delta == 0 {
+            continue;
+        }
+
+        let positive = signed_delta > 0;
+        let is_hat_or_digital = full_range <= 2 || format!("{:?}", code).contains("HAT");
+
+        // Distancia desde el reposo hasta el tope teórico en el sentido del movimiento
+        let directional_max = if positive {
+            (max - rest).abs()
+        } else {
+            (rest - min).abs()
+        }
+        .max(1);
+
+        let travel_ratio = (delta as f32 / directional_max as f32).clamp(0.0, 1.0);
+        let threshold = if is_hat_or_digital {
+            0.45
+        } else {
+            AXIS_START_TRACK_RATIO
+        };
+
+        if travel_ratio >= threshold {
+            let replace = match best {
+                None => true,
+                Some(prev) => travel_ratio > prev.travel_ratio,
+            };
+            if replace {
+                best = Some(AxisMovement {
+                    axis: code,
+                    positive,
+                    delta,
+                    travel_ratio,
+                    is_digital: is_hat_or_digital,
+                });
+            }
         }
     }
-    best_axis
+
+    best
 }
 
 pub(crate) fn is_all_centered(
     axis_values: &HashMap<evdevil::event::Abs, i32>,
     ranges: &HashMap<evdevil::event::Abs, (i32, i32)>,
+    resting: &HashMap<evdevil::event::Abs, i32>,
 ) -> bool {
     for (&code, &cur) in axis_values {
-        if !is_hardware_centered(code, cur, ranges) {
+        let known_rest = resting.get(&code).copied();
+        if !is_hardware_centered(code, cur, ranges, known_rest) {
             return false;
         }
     }
@@ -156,32 +222,52 @@ pub(crate) fn generate_profile_toml_with_ids(
     }
     t.push('\n');
 
-    // Agrupar calibraciones por eje de destino (Xbox) manteniendo orden determinista
+    // Separar slots de ejes que provienen de ejes analógicos/HAT vs botones digitales (mandos antiguos)
     let mut axes_map: HashMap<&str, Vec<&AxisSlot>> = HashMap::new();
+    let mut digital_btn_axes: Vec<&AxisSlot> = Vec::new();
+
     for ax in axes {
-        if ax.source.is_some() {
-            axes_map.entry(ax.xbox_axis).or_default().push(ax);
+        if let Some(ref src) = ax.source {
+            if parse_key(src).is_ok() {
+                digital_btn_axes.push(ax);
+            } else {
+                axes_map.entry(ax.xbox_axis).or_default().push(ax);
+            }
         }
     }
 
     for (xbox_name, slots) in axes_map {
         let base = slots[0];
         if let Some(ref src) = base.source {
-            let dz = if xbox_name.contains("HAT") || xbox_name.ends_with('Z') {
+            // Zona muerta calibrada para conservar progresividad en sensores Hall Effect y potenciómetros
+            let dz = if xbox_name.contains("HAT") {
                 0
+            } else if xbox_name.ends_with('Z') {
+                4
             } else {
-                8000
+                3000
             };
+
             let abs_code = parse_abs(src).unwrap_or(evdevil::event::Abs::X);
             let center = resting.get(&abs_code).copied().unwrap_or(0);
-
-            // Usamos la inversión detectada en el primer slot calibrado para ese eje
             let final_invert = base.invert;
 
-            // Tomamos la máxima excursión registrada entre las direcciones calibradas del mismo eje
-            let max_delta = slots.iter().filter_map(|s| s.max_val).max();
+            // Para que el usuario alcance el 100% de velocidad en ambos extremos del stick/gatillo,
+            // usamos el menor de los topes máximos medidos (con un 2% de margen de saturación en el tope).
+            let valid_peaks: Vec<i32> = slots
+                .iter()
+                .filter_map(|s| s.max_val)
+                .filter(|&v| v > 0)
+                .collect();
+
+            let effective_peak = if valid_peaks.len() >= 2 {
+                valid_peaks.iter().copied().min()
+            } else {
+                valid_peaks.first().copied()
+            };
+
             let mut scale = 1.0;
-            if let Some(mv) = max_delta {
+            if let Some(mv) = effective_peak {
                 if mv > 0 {
                     let target_max = if xbox_name.contains("HAT") {
                         1.0
@@ -190,8 +276,13 @@ pub(crate) fn generate_profile_toml_with_ids(
                     } else {
                         32767.0
                     };
-                    scale = target_max / (mv as f32);
-                    if scale > 0.95 && scale < 1.05 {
+                    let saturated_peak = if xbox_name.contains("HAT") {
+                        mv as f32
+                    } else {
+                        (mv as f32 * 0.98).max(1.0)
+                    };
+                    scale = target_max / saturated_peak;
+                    if scale > 0.98 && scale < 1.02 {
                         scale = 1.0;
                     }
                 }
@@ -202,7 +293,7 @@ pub(crate) fn generate_profile_toml_with_ids(
             t.push_str(&format!("target = {:?}\n", xbox_name));
             t.push_str(&format!("invert = {}\n", final_invert));
             t.push_str(&format!("deadzone = {}\n", dz));
-            t.push_str(&format!("scale = {:.3}\n", scale));
+            t.push_str(&format!("scale = {:.4}\n", scale));
             t.push_str(&format!("center = {}\n\n", center));
         }
     }
@@ -214,6 +305,31 @@ pub(crate) fn generate_profile_toml_with_ids(
             t.push_str(&format!("target = {:?}\n\n", btn.xbox_key));
         }
     }
+
+    // Mapeo híbrido para mandos antiguos cuyos gatillos o cruceta son botones (0 y 1)
+    for dax in digital_btn_axes {
+        if let Some(ref src) = dax.source {
+            let active_val = if dax.xbox_axis == "ABS_Z" || dax.xbox_axis == "ABS_RZ" {
+                255
+            } else if dax.xbox_axis.contains("HAT") {
+                if dax.positive_expected {
+                    1
+                } else {
+                    -1
+                }
+            } else if dax.positive_expected {
+                32767
+            } else {
+                -32768
+            };
+
+            t.push_str("[[button_axes]]\n");
+            t.push_str(&format!("source = {:?}\n", src));
+            t.push_str(&format!("target = {:?}\n", dax.xbox_axis));
+            t.push_str(&format!("active_value = {}\n\n", active_val));
+        }
+    }
+
     t
 }
 
@@ -343,7 +459,6 @@ pub(crate) fn emulation_loop(
     );
 
     let mut buf = [InputEvent::zeroed(); 64];
-    // Buffer reutilizable sin realocaciones en el bucle caliente
     let mut batch_out: Vec<InputEvent> = Vec::with_capacity(64);
 
     while running.load(Ordering::Relaxed) {
@@ -365,8 +480,14 @@ pub(crate) fn emulation_loop(
                             }
                         }
                         EventKind::Key(ke) => {
+                            let pressed = ke.state() == KeyState::PRESSED;
                             if let Some(target) = mapper.map_button(ke.key()) {
                                 batch_out.push(KeyEvent::new(target, ke.state()).into());
+                            }
+                            if let Some((target_abs, mapped_val)) =
+                                mapper.map_button_to_axis(ke.key(), pressed)
+                            {
+                                batch_out.push(AbsEvent::new(target_abs, mapped_val).into());
                             }
                         }
                         _ => {}

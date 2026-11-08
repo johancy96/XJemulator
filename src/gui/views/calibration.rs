@@ -20,7 +20,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
             _ => {}
         }
 
-        ui.add_space(30.0);
+        ui.add_space(25.0);
         render_navigation_footer(app, ui);
     });
 
@@ -29,7 +29,7 @@ pub fn render(app: &mut App, ui: &mut egui::Ui) {
 }
 
 fn render_debug_console(app: &App, ui: &mut egui::Ui) {
-    ui.add_space(20.0);
+    ui.add_space(15.0);
     egui::Frame::default()
         .fill(Theme::BG_DEEP)
         .corner_radius(egui::CornerRadius::same(4))
@@ -43,7 +43,7 @@ fn render_debug_console(app: &App, ui: &mut egui::Ui) {
             );
             egui::ScrollArea::vertical()
                 .id_salt("debug_console")
-                .max_height(80.0)
+                .max_height(70.0)
                 .show(ui, |ui| {
                     for log in &app.calib_logs {
                         ui.label(
@@ -73,7 +73,7 @@ fn render_button_step(app: &mut App, ui: &mut egui::Ui, index: usize) {
 
     draw_xbox_controller(ui, Some(xbox_key), None);
 
-    ui.add_space(15.0);
+    ui.add_space(12.0);
     ui.label(
         egui::RichText::new(label)
             .size(28.0)
@@ -82,7 +82,7 @@ fn render_button_step(app: &mut App, ui: &mut egui::Ui, index: usize) {
     );
     ui.label(egui::RichText::new(hint).weak().size(16.0));
 
-    ui.add_space(20.0);
+    ui.add_space(15.0);
     app.handle_calibration_input();
 }
 
@@ -111,31 +111,35 @@ fn render_axis_step(app: &mut App, ui: &mut egui::Ui, index: usize) {
             .color(egui::Color32::WHITE),
     );
     ui.label(egui::RichText::new(&dir_label).size(20.0).color(Theme::ACCENT));
-    ui.add_space(20.0);
+    ui.add_space(15.0);
 
+    // La franja verde de movimiento SOLO aparece durante CalibStep::Axes cuando
+    // el mando ya estuvo en reposo (!waiting_for_release) y el usuario está moviendo el eje.
     if app.waiting_for_release {
+        if app.needs_user_release_notice {
+            ui.vertical_centered(|ui| {
+                ui.label(
+                    egui::RichText::new(crate::i18n::t(&app.config.lang, "calib_release"))
+                        .size(14.0)
+                        .color(Theme::INFO),
+                );
+            });
+            ui.add_space(15.0);
+        }
+    } else if app.current_travel_ratio > 0.0 {
+        let ratio = app.current_travel_ratio.clamp(0.0, 1.0);
+        let pct = (ratio * 100.0).round() as i32;
         ui.vertical_centered(|ui| {
             ui.add(
-                egui::ProgressBar::new(1.0)
-                    .text(crate::i18n::t(&app.config.lang, "lbl_release_stick"))
+                egui::ProgressBar::new(ratio)
+                    .text(format!("{}%", pct))
+                    .fill(if ratio >= 0.85 {
+                        Theme::SUCCESS
+                    } else {
+                        Theme::ACCENT
+                    })
                     .animate(true)
-                    .desired_width(260.0),
-            );
-            ui.label(
-                egui::RichText::new(crate::i18n::t(&app.config.lang, "lbl_waiting_center"))
-                    .small()
-                    .color(Theme::INFO),
-            );
-        });
-        ui.add_space(20.0);
-    } else if let Some(since) = app.detection_since {
-        let progress = (since.elapsed().as_secs_f32() / 0.25).min(1.0);
-        ui.vertical_centered(|ui| {
-            ui.add(
-                egui::ProgressBar::new(progress)
-                    .text(format!("{}%", (progress * 100.0) as i32))
-                    .animate(true)
-                    .desired_width(200.0),
+                    .desired_width(240.0),
             );
             ui.label(
                 egui::RichText::new(crate::i18n::t(&app.config.lang, "lbl_hold_confirm"))
@@ -143,12 +147,12 @@ fn render_axis_step(app: &mut App, ui: &mut egui::Ui, index: usize) {
                     .weak(),
             );
         });
-        ui.add_space(20.0);
+        ui.add_space(15.0);
     }
 
     draw_xbox_controller(ui, None, Some(xbox_axis));
 
-    ui.add_space(20.0);
+    ui.add_space(15.0);
     app.handle_calibration_input();
 }
 

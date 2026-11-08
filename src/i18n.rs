@@ -38,10 +38,18 @@ pub fn t<'a>(lang: &Lang, key: &'a str) -> &'a str {
         (Lang::En, "lbl_saved_profiles") => "Saved profiles",
         (Lang::Es, "tooltip_delete") => "Eliminar perfil",
         (Lang::En, "tooltip_delete") => "Delete profile",
-        (Lang::Es, "tooltip_view") => "Ver contenido",
-        (Lang::En, "tooltip_view") => "View content",
+        (Lang::Es, "tooltip_view") => "Ver/Editar perfil",
+        (Lang::En, "tooltip_view") => "View/Edit profile",
         (Lang::Es, "btn_save_changes") => "💾 Guardar cambios",
         (Lang::En, "btn_save_changes") => "💾 Save changes",
+        (Lang::Es, "btn_close") => "Cerrar",
+        (Lang::En, "btn_close") => "Close",
+        (Lang::Es, "btn_load_profile") => "Cargar",
+        (Lang::En, "btn_load_profile") => "Load",
+        (Lang::Es, "lbl_active_badge") => "ACTIVO",
+        (Lang::En, "lbl_active_badge") => "ACTIVE",
+        (Lang::Es, "lbl_toml_subtitle") => "Perfil de mapeo TOML",
+        (Lang::En, "lbl_toml_subtitle") => "TOML mapping profile",
 
         // --- RAW MONITOR ---
         (Lang::Es, "lbl_raw_monitor") => "Monitor RAW",
@@ -54,8 +62,8 @@ pub fn t<'a>(lang: &Lang, key: &'a str) -> &'a str {
         // --- CALIBRATION WIZARD ---
         (Lang::Es, "lbl_calib_wiz") => "Asistente de Calibración",
         (Lang::En, "lbl_calib_wiz") => "Calibration Wizard",
-        (Lang::Es, "lbl_profile_name") => "Nombre del nuevo perfil:",
-        (Lang::En, "lbl_profile_name") => "New profile name:",
+        (Lang::Es, "lbl_profile_name") => "Nombre del perfil:",
+        (Lang::En, "lbl_profile_name") => "Profile name:",
         (Lang::Es, "btn_start_calib") => "\u{e3d0} Iniciar calibración",
         (Lang::En, "btn_start_calib") => "\u{e3d0} Start calibration",
         (Lang::Es, "warning_busy") => {
@@ -115,6 +123,27 @@ pub fn t<'a>(lang: &Lang, key: &'a str) -> &'a str {
         (Lang::En, "calib_detecting") => "Detecting...",
         (Lang::Es, "btn_cancel") => "Cancelar",
         (Lang::En, "btn_cancel") => "Cancel",
+
+        (Lang::Es, "lbl_release_stick") => "¡SUELTA EL JOYSTICK / GATILLO!",
+        (Lang::En, "lbl_release_stick") => "RELEASE THE JOYSTICK / TRIGGER!",
+        (Lang::Es, "lbl_waiting_center") => "Esperando retorno al centro...",
+        (Lang::En, "lbl_waiting_center") => "Waiting for return to center...",
+        (Lang::Es, "lbl_hold_confirm") => "Sostén para confirmar...",
+        (Lang::En, "lbl_hold_confirm") => "Hold to confirm...",
+        (Lang::Es, "btn_back_step") => "⬅ Retroceder",
+        (Lang::En, "btn_back_step") => "⬅ Back",
+        (Lang::Es, "btn_skip_step") => "⏭ Omitir",
+        (Lang::En, "btn_skip_step") => "⏭ Skip",
+        (Lang::Es, "btn_cancel_step") => "✖ Cancelar",
+        (Lang::En, "btn_cancel_step") => "✖ Cancel",
+        (Lang::Es, "lbl_mapping_done") => "✨ Mapeo Completado",
+        (Lang::En, "lbl_mapping_done") => "✨ Mapping Completed",
+        (Lang::Es, "lbl_mapping_done_sub") => "Asigna un nombre a tu perfil antes de guardarlo.",
+        (Lang::En, "lbl_mapping_done_sub") => "Assign a name to your profile before saving.",
+        (Lang::Es, "lbl_diag_console") => "⌨ CONSOLA DE DIAGNÓSTICO",
+        (Lang::En, "lbl_diag_console") => "⌨ DIAGNOSTIC CONSOLE",
+        (Lang::Es, "lbl_axis_synced") => "Eje sincronizado. Mueve la palanca o gatillo...",
+        (Lang::En, "lbl_axis_synced") => "Axis synchronized. Move the stick or trigger...",
 
         // --- UDEV STATUS ---
         (Lang::Es, "udev_error_title") => "Permisos udev no detectados",
@@ -194,7 +223,7 @@ pub fn t<'a>(lang: &Lang, key: &'a str) -> &'a str {
         (Lang::En, "dir_up") => "push UP  ▲",
         (Lang::Es, "dir_press") => "apriétalo a FONDO  ⬇",
         (Lang::En, "dir_press") => "press fully DOWN  ⬇",
-        
+
         // --- NEW MODERN UI ---
         (Lang::Es, "calib_step_buttons") => "PASO 1: BOTONES",
         (Lang::En, "calib_step_buttons") => "STEP 1: BUTTONS",
@@ -208,7 +237,7 @@ pub fn t<'a>(lang: &Lang, key: &'a str) -> &'a str {
         (Lang::En, "lbl_emulating_active") => "🎮 ACTIVELY EMULATING",
         (Lang::Es, "lbl_select_to_start") => "Selecciona un mando para comenzar",
         (Lang::En, "lbl_select_to_start") => "Select a gamepad to start",
-        
+
         (Lang::Es, "nav_dashboard") => "Dashboard",
         (Lang::En, "nav_dashboard") => "Dashboard",
         (Lang::Es, "nav_profiles") => "Perfiles",

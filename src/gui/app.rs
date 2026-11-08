@@ -5,13 +5,13 @@ use std::sync::{Arc, Mutex};
 use eframe::egui;
 use tracing::error;
 
+use crate::gui::backend::*;
+use crate::gui::theme::Theme;
+use crate::gui::types::*;
+use crate::gui::views;
 use crate::mapper::Mapper;
 use crate::scanner::{scan_gamepads, GamepadInfo};
 use crate::virtual_device::VirtualXbox360;
-use crate::gui::backend::*;
-use crate::gui::types::*;
-use crate::gui::theme::Theme;
-use crate::gui::views;
 
 pub struct App {
     pub current_view: AppView,
@@ -20,6 +20,8 @@ pub struct App {
 
     pub raw_capture: Arc<Mutex<RawCapture>>,
     pub reader_running: Arc<AtomicBool>,
+    pub reader_handle: Option<std::thread::JoinHandle<()>>,
+    pub egui_ctx: Option<egui::Context>,
 
     pub emulators: HashMap<String, Arc<AtomicBool>>,
 
@@ -54,7 +56,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(egui_ctx: Option<egui::Context>) -> Self {
         let gamepads = scan_gamepads();
         let saved_profiles = scan_profiles();
         let (mapper, active_profile) = load_best_profile(&saved_profiles);
@@ -66,6 +68,8 @@ impl App {
             selected: None,
             raw_capture: Arc::new(Mutex::new(RawCapture::default())),
             reader_running: Arc::new(AtomicBool::new(false)),
+            reader_handle: None,
+            egui_ctx,
             emulators: HashMap::new(),
             mapper,
             active_profile,
@@ -88,24 +92,28 @@ impl App {
             axis_min: HashMap::new(),
             axis_max: HashMap::new(),
             current_detect: None,
-            detection_since: Option::None,
+            detection_since: None,
             waiting_for_release: false,
             stability_timer: None,
         };
-        
+
         app.check_uinput_permission();
         app.refresh_profiles_cache();
         app
     }
 
     pub fn check_uinput_permission(&mut self) {
-        self.uinput_ok = std::fs::OpenOptions::new().write(true).open("/dev/uinput").is_ok();
+        self.uinput_ok = std::fs::OpenOptions::new()
+            .write(true)
+            .open("/dev/uinput")
+            .is_ok();
     }
 
     pub fn refresh_profiles_cache(&mut self) {
         self.profiles_cache.clear();
-        for path in &self.saved_profiles {
-            if let Ok(content) = std::fs::read_to_string(path) {
+        for name in &self.saved_profiles {
+            let full_path = crate::paths::AppPaths::profile_path(name);
+            if let Ok(content) = std::fs::read_to_string(full_path) {
                 if let Ok(prof) = toml::from_str::<crate::mapper::MappingProfile>(&content) {
                     self.profiles_cache.push(prof);
                 }
@@ -116,21 +124,24 @@ impl App {
     // --- Lógica de Dispositivos ---
 
     pub fn select_gamepad(&mut self, idx: usize) {
-        if self.selected == Some(idx) { return; }
+        if self.selected == Some(idx) {
+            return;
+        }
         self.selected = Some(idx);
-        
-        let gp = self.gamepads[idx].clone();
-        self.try_auto_load_profile(gp.vendor_id, gp.product_id);
+
+        if let Some(gp) = self.gamepads.get(idx).cloned() {
+            self.try_auto_load_profile(gp.vendor_id, gp.product_id);
+        }
         self.reset_calibration();
     }
 
     fn try_auto_load_profile(&mut self, vid: u16, pid: u16) {
-        // Uso de cache: 0 accesos al disco en el hot-path
         for prof in &self.profiles_cache {
             if prof.vendor_id == Some(vid) && prof.product_id == Some(pid) {
                 if let Ok(m) = Mapper::from_profile(prof) {
+                    let safe_name = crate::paths::AppPaths::sanitize_profile_name(&prof.name);
                     self.mapper = m;
-                    self.active_profile = Some(format!("{}.toml", prof.name));
+                    self.active_profile = Some(format!("{}.toml", safe_name));
                     self.status_msg = Some(format!("✨ Perfil auto-detectado: {}", prof.name));
                     return;
                 }
@@ -144,25 +155,34 @@ impl App {
             *cap = RawCapture::default();
         }
         let capture = self.raw_capture.clone();
-        let running = self.reader_running.clone();
-        running.store(true, Ordering::SeqCst);
-        std::thread::spawn(move || raw_reader_loop(path, capture, running));
+        let running = Arc::new(AtomicBool::new(true));
+        self.reader_running = running.clone();
+        let ctx = self.egui_ctx.clone();
+        self.reader_handle = Some(std::thread::spawn(move || {
+            raw_reader_loop(path, capture, running, ctx)
+        }));
     }
 
     pub fn stop_reader(&mut self) {
         self.reader_running.store(false, Ordering::SeqCst);
+        if let Some(handle) = self.reader_handle.take() {
+            let _ = handle.join();
+        }
     }
 
     // --- Lógica de Emulación ---
 
     pub fn start_emulator(&mut self, path: String) {
-        if self.emulators.contains_key(&path) { return; }
+        if self.emulators.contains_key(&path) {
+            return;
+        }
         if self.emulators.len() >= 4 {
             self.status_msg = Some("Máximo 4 controladores".into());
             return;
         }
 
-        self.stop_reader(); // Liberar el dispositivo para el emulador
+        // Liberar de forma síncrona el lector antes de abrir el emulador (evita conflicto EVIOCGRAB)
+        self.stop_reader();
 
         match VirtualXbox360::new() {
             Ok(vx) => {
@@ -188,37 +208,44 @@ impl App {
     pub fn stop_emulator(&mut self, path: &str) {
         if let Some(running) = self.emulators.remove(path) {
             running.store(false, Ordering::SeqCst);
-            if let Some(idx) = self.selected {
-                if self.gamepads[idx].path == path {
-                    self.start_reader(path.to_string());
-                }
-            }
+        }
+    }
+
+    pub fn stop_all_activity(&mut self) {
+        self.stop_reader();
+        for (_, running) in self.emulators.drain() {
+            running.store(false, Ordering::SeqCst);
         }
     }
 
     // --- Lógica de Perfiles ---
 
     pub fn load_profile_from_path(&mut self, name: &str) {
-        // Sanitización: Evitar que el path contenga ".." para prevenir Path Traversal
-        if name.contains("..") || name.contains('/') {
+        if name.contains("..") || name.contains('/') || name.contains('\\') {
             error!("Intento de acceso a ruta no permitida: {}", name);
             return;
         }
 
         let path = crate::paths::AppPaths::profile_path(name);
-        if let Ok(content) = std::fs::read_to_string(path) {
+        if let Ok(content) = std::fs::read_to_string(&path) {
             if let Ok(prof) = toml::from_str::<crate::mapper::MappingProfile>(&content) {
                 if let Ok(m) = Mapper::from_profile(&prof) {
+                    let filename = path
+                        .file_name()
+                        .map(|f| f.to_string_lossy().to_string())
+                        .unwrap_or_else(|| name.to_string());
                     self.mapper = m;
-                    self.active_profile = Some(name.to_string());
-                    self.status_msg = Some(format!("Perfil cargado: {}", name));
+                    self.active_profile = Some(filename.clone());
+                    self.status_msg = Some(format!("Perfil cargado: {}", filename));
                 }
             }
         }
     }
 
     pub fn delete_profile(&mut self, name: &str) {
-        if name.contains("..") || name.contains('/') { return; }
+        if name.contains("..") || name.contains('/') || name.contains('\\') {
+            return;
+        }
         let path = crate::paths::AppPaths::profile_path(name);
         let _ = std::fs::remove_file(path);
         self.saved_profiles = scan_profiles();
@@ -245,11 +272,11 @@ impl App {
         self.current_detect = None;
         self.detection_since = None;
         self.stop_reader();
-        
-        // Purga atómica de la cola de eventos
+
         if let Ok(mut cap) = self.raw_capture.lock() {
             cap.key_queue.clear();
             cap.axis_values.clear();
+            cap.pressed_keys.clear();
         }
     }
 
@@ -261,8 +288,7 @@ impl App {
         self.stability_timer = None;
         self.current_detect = None;
         self.detection_since = None;
-        
-        // Limpieza de buffers para evitar "sangrado" de inputs
+
         if let Ok(mut cap) = self.raw_capture.lock() {
             cap.key_queue.clear();
         }
@@ -272,26 +298,32 @@ impl App {
     pub fn start_assisted_mapping(&mut self) {
         self.reset_calibration();
         if let Some(idx) = self.selected {
-            let path = self.gamepads[idx].path.clone();
-            self.start_reader(path);
+            if let Some(gp) = self.gamepads.get(idx).cloned() {
+                self.profile_name = crate::paths::AppPaths::sanitize_profile_name(&gp.name);
+                self.start_reader(gp.path);
+            }
         }
         self.advance_to_step(CalibStep::Buttons(0));
     }
 
     pub fn handle_calibration_input(&mut self) {
-        if self.in_cooldown() { return; }
+        if self.in_cooldown() {
+            return;
+        }
 
         match self.calib_step {
             CalibStep::Buttons(idx) => {
                 let key = if let Ok(mut cap) = self.raw_capture.lock() {
                     cap.key_queue.pop_front()
-                } else { None };
+                } else {
+                    None
+                };
 
                 if let Some(key) = key {
                     let key_name = format!("{:?}", key);
                     self.calib_btns[idx].source = Some(key_name);
                     self.start_btn_cooldown();
-                    
+
                     let next_idx = idx + 1;
                     if next_idx >= self.calib_btns.len() {
                         self.advance_to_step(CalibStep::Axes(0));
@@ -301,22 +333,23 @@ impl App {
                 }
             }
             CalibStep::Axes(idx) => {
-                let ranges = self.selected.and_then(|idx| self.gamepads.get(idx)).map(|g| &g.axis_ranges);
+                let ranges = self
+                    .selected
+                    .and_then(|i| self.gamepads.get(i))
+                    .map(|g| &g.axis_ranges);
                 let empty_ranges = HashMap::new();
                 let ranges_ref = ranges.unwrap_or(&empty_ranges);
                 let current_target = self.calib_axes[idx].xbox_axis;
 
-                // --- BLOQUE DE DETECCIÓN ATÓMICO (Sin Clones) ---
                 let detected = {
                     let lock = self.raw_capture.lock();
-                    let Ok(cap) = lock else { return; };
+                    let Ok(cap) = lock else { return };
 
                     if self.waiting_for_release {
                         if crate::gui::backend::is_all_centered(&cap.axis_values, ranges_ref) {
                             let now = std::time::Instant::now();
                             let start = self.stability_timer.get_or_insert(now);
-                            if start.elapsed() >= std::time::Duration::from_millis(400) {
-                                // SEÑAL DE CAPTURA
+                            if start.elapsed() >= std::time::Duration::from_millis(250) {
                                 Some((None, cap.axis_values.clone()))
                             } else {
                                 None
@@ -326,7 +359,6 @@ impl App {
                             None
                         }
                     } else {
-                        // EXCLUSIÓN DINÁMICA
                         let mut exclude = HashSet::new();
                         for prev in &self.calib_axes {
                             if let (Some(src), tgt) = (&prev.source, prev.xbox_axis) {
@@ -337,27 +369,26 @@ impl App {
                                 }
                             }
                         }
-                        
+
                         let det = crate::gui::backend::detect_axis_movement(
-                            &cap.axis_values, &self.axis_resting, &exclude, ranges_ref
+                            &cap.axis_values,
+                            &self.axis_resting,
+                            &exclude,
+                            ranges_ref,
                         );
-                        
-                        // Retornamos el detector Y los valores actuales para telemetría max_val
+
                         det.map(|d| (Some(d), cap.axis_values.clone()))
                     }
                 };
 
-                // --- PROCESAMIENTO DE RESULTADOS (Fuera del Lock) ---
                 if let Some((det, values)) = detected {
                     if let Some(d) = det {
-                        // Caso: Movimiento detectado
                         let (axis, pos) = d;
                         let is_hat = format!("{:?}", axis).contains("HAT");
-                        let hold_req = if is_hat { 50 } else { 350 };
+                        let hold_req = if is_hat { 40 } else { 250 };
 
                         if self.current_detect == Some(d) {
                             if let Some(since) = self.detection_since {
-                                // Capturar amplitud máxima para escalado de sensibilidad
                                 if !is_hat {
                                     let rest = self.axis_resting.get(&axis).copied().unwrap_or(0);
                                     let cur_val = values.get(&axis).copied().unwrap_or(rest);
@@ -371,9 +402,14 @@ impl App {
                                 if since.elapsed().as_millis() >= hold_req as u128 {
                                     let axis_name = format!("{:?}", axis);
                                     self.calib_axes[idx].source = Some(axis_name);
-                                    self.calib_axes[idx].invert = self.calib_axes[idx].positive_expected != pos;
+                                    self.calib_axes[idx].invert =
+                                        self.calib_axes[idx].positive_expected != pos;
                                     self.axes_used.insert(axis);
-                                    self.advance_to_step(if idx + 1 >= self.calib_axes.len() { CalibStep::Review } else { CalibStep::Axes(idx + 1) });
+                                    self.advance_to_step(if idx + 1 >= self.calib_axes.len() {
+                                        CalibStep::Review
+                                    } else {
+                                        CalibStep::Axes(idx + 1)
+                                    });
                                 }
                             } else {
                                 self.detection_since = Some(std::time::Instant::now());
@@ -383,14 +419,14 @@ impl App {
                             self.detection_since = Some(std::time::Instant::now());
                         }
                     } else {
-                        // Caso: Centro estable alcanzado (Señal de captura)
-                        // Fusión inteligente: No sobreescribir todo, solo actualizar/añadir centros nuevos
                         for (k, v) in values {
                             self.axis_resting.insert(k, v);
                         }
                         self.waiting_for_release = false;
                         self.stability_timer = None;
-                        self.calib_logs.push("Eje sincronizado. Mueve la palanca...".into());
+                        self.calib_logs.push(
+                            crate::i18n::t(&self.config.lang, "lbl_axis_synced").to_string(),
+                        );
                     }
                 } else {
                     self.current_detect = None;
@@ -402,22 +438,35 @@ impl App {
     }
 
     fn in_cooldown(&self) -> bool {
-        self.cooldown_until.map_or(false, |t| std::time::Instant::now() < t)
+        self.cooldown_until
+            .map_or(false, |t| std::time::Instant::now() < t)
     }
 
     fn start_btn_cooldown(&mut self) {
-        self.cooldown_until = Some(std::time::Instant::now() + std::time::Duration::from_millis(500));
+        self.cooldown_until =
+            Some(std::time::Instant::now() + std::time::Duration::from_millis(250));
     }
 
     pub fn skip_calibration_step(&mut self) {
         match self.calib_step {
             CalibStep::Buttons(idx) => {
                 self.calib_btns[idx].source = None;
-                self.calib_logs.clear();
-                self.calib_step = CalibStep::Buttons(idx + 1);
-                if idx + 1 >= self.calib_btns.len() {
+                let next_idx = idx + 1;
+                if next_idx >= self.calib_btns.len() {
                     self.capture_resting();
-                    self.calib_step = CalibStep::Axes(0);
+                    self.advance_to_step(CalibStep::Axes(0));
+                } else {
+                    self.advance_to_step(CalibStep::Buttons(next_idx));
+                }
+            }
+            CalibStep::Axes(idx) => {
+                self.calib_axes[idx].source = None;
+                self.calib_axes[idx].max_val = None;
+                let next_idx = idx + 1;
+                if next_idx >= self.calib_axes.len() {
+                    self.advance_to_step(CalibStep::Review);
+                } else {
+                    self.advance_to_step(CalibStep::Axes(next_idx));
                 }
             }
             _ => {}
@@ -432,7 +481,6 @@ impl App {
     }
 
     pub fn prev_calibration_step(&mut self) {
-        // Resetear estados de detección para evitar bloqueos
         self.current_detect = None;
         self.detection_since = None;
         self.waiting_for_release = false;
@@ -444,14 +492,16 @@ impl App {
             }
             CalibStep::Axes(idx) => {
                 if idx == 0 {
-                    self.calib_step = CalibStep::Buttons(self.calib_btns.len() - 1);
-                    self.calib_btns.last_mut().map(|b| b.source = None);
+                    let last_btn = self.calib_btns.len() - 1;
+                    self.calib_step = CalibStep::Buttons(last_btn);
+                    if let Some(b) = self.calib_btns.last_mut() {
+                        b.source = None;
+                    }
                 } else {
                     self.calib_step = CalibStep::Axes(idx - 1);
                     self.calib_axes[idx - 1].source = None;
                     self.calib_axes[idx - 1].max_val = None;
-                    
-                    // Re-calcular ejes usados sin incluir el que vamos a re-mapear
+
                     self.axes_used.clear();
                     for i in 0..(idx - 1) {
                         if let Some(ref src) = self.calib_axes[i].source {
@@ -463,8 +513,11 @@ impl App {
                 }
             }
             CalibStep::Review => {
-                self.calib_step = CalibStep::Axes(self.calib_axes.len() - 1);
-                self.calib_axes.last_mut().map(|a| a.source = None);
+                let last_axis = self.calib_axes.len() - 1;
+                self.calib_step = CalibStep::Axes(last_axis);
+                if let Some(a) = self.calib_axes.last_mut() {
+                    a.source = None;
+                }
             }
             _ => {}
         }
@@ -477,21 +530,26 @@ impl App {
         let mut vid = None;
         let mut pid = None;
         if let Some(idx) = self.selected {
-            vid = Some(self.gamepads[idx].vendor_id);
-            pid = Some(self.gamepads[idx].product_id);
+            if let Some(gp) = self.gamepads.get(idx) {
+                vid = Some(gp.vendor_id);
+                pid = Some(gp.product_id);
+            }
         }
 
+        let safe_name = crate::paths::AppPaths::sanitize_profile_name(&self.profile_name);
+        self.profile_name = safe_name.clone();
+
         let toml = generate_profile_toml_with_ids(
-            &self.calib_btns, 
-            &self.calib_axes, 
-            &self.profile_name, 
+            &self.calib_btns,
+            &self.calib_axes,
+            &safe_name,
             &self.axis_resting,
             vid,
-            pid
+            pid,
         );
-        let path = crate::paths::AppPaths::profile_path(&self.profile_name);
+        let path = crate::paths::AppPaths::profile_path(&safe_name);
         if std::fs::write(&path, toml).is_ok() {
-            let filename = format!("{}.toml", self.profile_name);
+            let filename = format!("{}.toml", safe_name);
             self.saved_profiles = scan_profiles();
             self.refresh_profiles_cache();
             self.load_profile_from_path(&filename);
@@ -502,51 +560,73 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Re-comprobar permisos cada 2 segundos aproximadamente
+        if self.egui_ctx.is_none() {
+            self.egui_ctx = Some(ctx.clone());
+        }
+
         if ctx.input(|i| i.time % 2.0 < 0.02) {
             self.check_uinput_permission();
         }
 
-        // Sincronización: Limpiar emuladores que se hayan detenido por errores (ej. grab failure)
-        self.emulators.retain(|_, running| running.load(Ordering::SeqCst));
+        self.emulators
+            .retain(|_, running| running.load(Ordering::SeqCst));
 
         Theme::apply(ctx);
 
-        // GPU Smart Sleep: 60 FPS si hay actividad
         let is_focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
-        
         if is_focused && (self.calib_step != CalibStep::Idle || !self.emulators.is_empty()) {
             ctx.request_repaint_after(std::time::Duration::from_millis(16));
         }
-        // Cuando no tiene el foco (is_focused == false) o está inactiva,
-        // confiamos en el modo reactivo nativo de eframe. No forzamos repaints
-        // para evitar que eglSwapBuffers bloquee el hilo principal en Linux.
 
-        egui::TopBottomPanel::top("header").frame(egui::Frame::NONE.fill(Theme::BG_DEEP).inner_margin(10.0)).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(format!("{} XJEMULATOR", crate::gui::fonts::icons::GAMEPAD)).strong().size(20.0).color(Theme::ACCENT));
-                ui.add_space(20.0);
-                
-                ui.selectable_value(&mut self.current_view, AppView::Dashboard, crate::i18n::t(&self.config.lang, "nav_dashboard"));
-                ui.selectable_value(&mut self.current_view, AppView::Profiles, crate::i18n::t(&self.config.lang, "nav_profiles"));
+        egui::TopBottomPanel::top("header")
+            .frame(egui::Frame::NONE.fill(Theme::BG_DEEP).inner_margin(10.0))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "{} XJEMULATOR",
+                            crate::gui::fonts::icons::GAMEPAD
+                        ))
+                        .strong()
+                        .size(20.0)
+                        .color(Theme::ACCENT),
+                    );
+                    ui.add_space(20.0);
 
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(crate::gui::fonts::icons::X).clicked() {
-                        self.quitting = true;
-                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
+                    ui.selectable_value(
+                        &mut self.current_view,
+                        AppView::Dashboard,
+                        crate::i18n::t(&self.config.lang, "nav_dashboard"),
+                    );
+                    ui.selectable_value(
+                        &mut self.current_view,
+                        AppView::Profiles,
+                        crate::i18n::t(&self.config.lang, "nav_profiles"),
+                    );
 
-                    ui.add_space(8.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button(crate::gui::fonts::icons::X).clicked() {
+                            self.quitting = true;
+                            self.stop_all_activity();
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
 
-                    if ui.button(crate::gui::fonts::icons::GLOBE).clicked() {
-                        self.config.lang = match self.config.lang {
-                            crate::i18n::Lang::Es => crate::i18n::Lang::En,
-                            crate::i18n::Lang::En => crate::i18n::Lang::Es,
-                        };
-                    }
+                        ui.add_space(8.0);
+
+                        if ui.button(crate::gui::fonts::icons::GLOBE).clicked() {
+                            self.config.lang = match self.config.lang {
+                                crate::i18n::Lang::Es => crate::i18n::Lang::En,
+                                crate::i18n::Lang::En => crate::i18n::Lang::Es,
+                            };
+                            self.config.save();
+                            if self.calib_step == CalibStep::Idle {
+                                self.calib_btns = default_btn_slots(&self.config.lang);
+                                self.calib_axes = default_axis_slots(&self.config.lang);
+                            }
+                        }
+                    });
                 });
             });
-        });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.calib_step != CalibStep::Idle {
@@ -559,13 +639,19 @@ impl eframe::App for App {
             }
         });
 
-        egui::TopBottomPanel::bottom("footer").frame(egui::Frame::NONE.fill(Theme::BG_DEEP).inner_margin(5.0)).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                if let Some(msg) = &self.status_msg {
-                    ui.label(egui::RichText::new(msg).size(12.0).weak());
-                }
+        egui::TopBottomPanel::bottom("footer")
+            .frame(egui::Frame::NONE.fill(Theme::BG_DEEP).inner_margin(5.0))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    if let Some(msg) = &self.status_msg {
+                        ui.label(egui::RichText::new(msg).size(12.0).weak());
+                    }
+                });
             });
-        });
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.stop_all_activity();
     }
 }
 
@@ -578,8 +664,12 @@ pub fn run() -> eframe::Result<()> {
             .with_min_inner_size([800.0, 500.0]),
         ..Default::default()
     };
-    eframe::run_native("XJEmulator", options, Box::new(|cc| {
-        crate::gui::fonts::setup_custom_fonts(&cc.egui_ctx);
-        Ok(Box::new(App::new()))
-    }))
+    eframe::run_native(
+        "XJEmulator",
+        options,
+        Box::new(|cc| {
+            crate::gui::fonts::setup_custom_fonts(&cc.egui_ctx);
+            Ok(Box::new(App::new(Some(cc.egui_ctx.clone()))))
+        }),
+    )
 }

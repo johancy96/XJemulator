@@ -1,6 +1,7 @@
 use evdevil::event::InputEvent;
 use evdevil::uinput::UinputDevice;
 use evdevil::{Bus, InputId};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::info;
 
 use crate::xbox_descriptor;
@@ -9,8 +10,9 @@ use crate::xbox_descriptor;
 /// Must match exactly for SDL2 to auto-detect as XInput device.
 const XBOX360_DEVICE_NAME: &str = "Microsoft X-Box 360 pad";
 
-/// Time to wait after device creation for SDL2/udev detection
+/// Time to wait after device creation for SDL2/udev detection (executed on worker thread)
 const DETECTION_DELAY_MS: u64 = 1000;
+const DETECTION_SLICE_MS: u64 = 50;
 
 /// Virtual Xbox 360 controller created via uinput.
 ///
@@ -22,16 +24,13 @@ pub struct VirtualXbox360 {
 }
 
 impl VirtualXbox360 {
-    /// Create a new virtual Xbox 360 controller.
+    /// Create a new virtual Xbox 360 controller immediately without blocking the UI thread.
     ///
     /// The device will be created with:
     /// - VID: 0x045e (Microsoft)
     /// - PID: 0x028e (Xbox 360 Wireless Controller)
     /// - Bus: USB
     /// - Name: "Microsoft X-Box 360 pad"
-    ///
-    /// After creation, a delay is applied to allow SDL2 and udev
-    /// to detect and configure the device before we start sending events.
     pub fn new() -> Result<Self, std::io::Error> {
         let axes = xbox_descriptor::xbox360_abs_axes();
 
@@ -49,34 +48,36 @@ impl VirtualXbox360 {
             .with_abs_axes(axes)?
             .build(XBOX360_DEVICE_NAME)?;
 
-        info!(
-            "Controlador virtual Xbox 360 creado (VID:PID={:04x}:{:04x})",
-            xbox_descriptor::XBOX360_VENDOR_ID,
-            xbox_descriptor::XBOX360_PRODUCT_ID
-        );
-
-        // Wait for SDL2/udev to detect and configure the device.
-        // Without this delay, Proton/Wine may miss the device entirely.
-        info!("Esperando deteccion de SDL2 ({}ms)...", DETECTION_DELAY_MS);
-        std::thread::sleep(std::time::Duration::from_millis(DETECTION_DELAY_MS));
-
-        // Check if device node exists
         let sysname = device
             .sysname()
             .map(|s: std::ffi::OsString| s.to_string_lossy().to_string())
             .unwrap_or_else(|_| "unknown".into());
 
-        info!("Dispositivo listo: /sys/devices/virtual/input/{}", sysname);
         info!(
-            "Verifica con: evtest /dev/input/ (busca '{}')",
-            XBOX360_DEVICE_NAME
+            "Controlador virtual Xbox 360 creado (VID:PID={:04x}:{:04x}) en /sys/devices/virtual/input/{}",
+            xbox_descriptor::XBOX360_VENDOR_ID,
+            xbox_descriptor::XBOX360_PRODUCT_ID,
+            sysname
         );
 
         Ok(Self { device })
     }
 
+    /// Wait for udev and SDL2 to enumerate the new virtual node on the worker thread,
+    /// while remaining responsive to cancellation.
+    pub fn wait_for_sdl2_detection(&self, running: &AtomicBool) {
+        info!("Esperando detección de SDL2/udev ({}ms)...", DETECTION_DELAY_MS);
+        let steps = DETECTION_DELAY_MS / DETECTION_SLICE_MS;
+        for _ in 0..steps {
+            if !running.load(Ordering::Relaxed) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(DETECTION_SLICE_MS));
+        }
+    }
+
     /// Write a batch of events at once (more efficient).
-    /// The kernel automatically appends SYN_REPORT after the batch.
+    /// The kernel/evdevil automatically appends SYN_REPORT after the batch.
     pub fn write_batch(&self, events: &[InputEvent]) -> Result<(), std::io::Error> {
         self.device.write(events)?;
         Ok(())

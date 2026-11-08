@@ -45,7 +45,16 @@ fn is_gamepad(device: &Evdev) -> bool {
     (has_abs && has_gamepad_buttons) || has_joystick_buttons
 }
 
-/// Scan /dev/input/ for gamepad devices
+/// Check if an evdev device is our own virtual uinput controller to prevent feedback loops
+fn is_virtual_xjemulator_device(name: &str, phys: Option<&str>, vid: u16, pid: u16) -> bool {
+    let is_spoofed_id = vid == crate::xbox_descriptor::XBOX360_VENDOR_ID
+        && pid == crate::xbox_descriptor::XBOX360_PRODUCT_ID;
+    let has_no_physical_bus = phys.map(|p| p.trim().is_empty()).unwrap_or(true);
+
+    name == "Microsoft X-Box 360 pad" && is_spoofed_id && has_no_physical_bus
+}
+
+/// Scan /dev/input/ for physical gamepad devices
 pub fn scan_gamepads() -> Vec<GamepadInfo> {
     let mut gamepads = Vec::new();
 
@@ -78,10 +87,16 @@ pub fn scan_gamepads() -> Vec<GamepadInfo> {
         }
 
         let name = device.name().unwrap_or_else(|_| "Desconocido".into());
-        let _phys = device.phys().unwrap_or(None);
+        let phys = device.phys().unwrap_or(None);
         let input_id = device.input_id().ok();
         let vendor_id = input_id.map(|id| id.vendor()).unwrap_or(0);
         let product_id = input_id.map(|id| id.product()).unwrap_or(0);
+
+        // Ignorar mandos virtuales creados por uinput (XJemulator)
+        if is_virtual_xjemulator_device(&name, phys.as_deref(), vendor_id, product_id) {
+            debug!("Ignorando dispositivo virtual propio en {}", path_str);
+            continue;
+        }
 
         let mut axis_ranges = HashMap::new();
         if let Ok(axes) = device.supported_abs_axes() {
@@ -99,7 +114,12 @@ pub fn scan_gamepads() -> Vec<GamepadInfo> {
 
         info!(
             "Gamepad detectado: {} [{}] ({:04x}:{:04x}) - {} ejes, {} botones",
-            name, path_str, vendor_id, product_id, axis_ranges.len(), buttons_count
+            name,
+            path_str,
+            vendor_id,
+            product_id,
+            axis_ranges.len(),
+            buttons_count
         );
 
         gamepads.push(GamepadInfo {
@@ -111,5 +131,6 @@ pub fn scan_gamepads() -> Vec<GamepadInfo> {
         });
     }
 
+    gamepads.sort_by(|a, b| a.path.cmp(&b.path));
     gamepads
 }

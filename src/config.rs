@@ -24,4 +24,11 @@ impl AppConfig {
         }
         Self::default()
     }
+
+    pub fn save(&self) {
+        let path = crate::paths::AppPaths::config_file();
+        if let Ok(content) = toml::to_string_pretty(self) {
+            let _ = fs::write(path, content);
+        }
+    }
 }

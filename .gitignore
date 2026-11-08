@@ -1,2 +1,5 @@
 # XJemulator ignore list
 /target
+*.AppImage
+*.appimage
+AppDir/

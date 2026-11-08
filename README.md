@@ -19,30 +19,17 @@ bash scripts/install-udev.sh
 
 ---
 
-## 📦 Step 2: Run or Build XJemulator
+## 📦 Step 2: Portable `.AppImage`
 
-### Option A: Portable `.AppImage`
-To build the portable `.AppImage` package from source:
+### Run the `.AppImage`
+Download the `.AppImage` from Releases, grant execution permissions, and run it:
+```bash
+chmod +x XJemulator-1.0.0-x86_64.AppImage
+./XJemulator-1.0.0-x86_64.AppImage
+```
+
+### Build the `.AppImage` Locally
+To generate `XJemulator-1.0.0-x86_64.AppImage` in the project root:
 ```bash
 bash scripts/build-appimage.sh
 ```
-This generates `XJemulator-1.0.0-x86_64.AppImage` in the project root.
-
-### Option B: Direct Development (From Source)
-1. Install system build dependencies:
-   - **Debian / Ubuntu / Linux Mint:**
-     ```bash
-     sudo apt update && sudo apt install -y build-essential pkg-config libdbus-1-dev libudev-dev curl
-     ```
-   - **Fedora / RHEL:**
-     ```bash
-     sudo dnf install -y gcc pkgconf-pkg-config dbus-devel systemd-devel curl
-     ```
-   - **Arch Linux / Manjaro:**
-     ```bash
-     sudo pacman -Sy --needed base-devel dbus systemd pkgconf curl
-     ```
-2. Run directly with Cargo:
-   ```bash
-   cargo run --release
-   ```
